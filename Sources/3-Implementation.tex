@@ -1,0 +1,76 @@
+\chapter{Implementation}
+
+We describe the implementation from the front-end to the backend, describing the compilation pipeline:
+\begin{itemize}
+    \item Shallow-embedded domain-specific language --  \textit{Ein}
+    \item Pointful array calculus, the terms of which are constructed by the \textit{Ein} front-end -- \textit{Phi}
+    \item Pointless array calculus, constructed by way of compiling Phi -- \textit{Yarr}
+    \item Newly introduced applicative that bridges pointful and point-free array programming -- \textit{Axial}
+    \item Execution backends in NumPy and PyTorch
+\end{itemize}
+
+\section{Ein -- shallow-embedded language}
+
+\subsection{Design}
+
+\subsection{Tensor class}
+
+\subsection{Combinators}
+
+\subsection{Size inference}
+
+\section{Phi -- pointful calculus}
+
+\subsection{Design}
+
+\subsection{Expressions}
+
+\subsection{Type system}
+
+\subsection{Term graphs and trees}
+
+\section{Yarr -- array calculus}
+
+\subsection{Expressions}
+
+\section{Compiling with Axials}
+
+\subsection{Intuition}
+
+$$ \mathrm{VarEnv} \times \mathrm{IndexEnv} \to \mathrm{Value} \,\simeq\, \mathrm{VarEnv} \to \mathrm{NDArray}\, \mathrm{Value} $$
+
+\subsection{Definition}
+
+\subsection{Rules}
+
+\section{Compiler Analyses}
+
+\subsection{Size equivalences}
+
+\subsection{Specialised folds}
+
+\section{Optimising transformations}
+
+\subsection{Peephole optimisations}
+
+\subsection{Tensor contractions}
+
+\subsection{Indexing}
+
+\subsubsection{Cartesian indexing}
+
+\subsubsection{Clipped translation pattern}
+
+\section{Execution backends}
+
+\subsection{Naive}
+
+\subsection{NumPy}
+
+\subsection{Generalising the NumPy backend}
+
+The very same methods as in the NumPy can be used in other array programming frameworks. This is because they, in many respects, derive from NumPy. Such a situation applies to the most popular libraries -- PyTorch, TensorFlow, Jax.
+
+\subsubsection{Challenges}
+
+\subsubsection{Automatic differentiation}

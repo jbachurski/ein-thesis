@@ -1,19 +1,22 @@
 \NeedsTeXFormat{LaTeX2e}
 \ProvidesClass{mimosis}[2017/08/01 Minimal modern thesis class]
 
-\PassOptionsToPackage{
-  DIV  = 10,    % TODO: Make configurable
-  BCOR = 10mm,  % TODO: Make configurable
-}{typearea}
+% \PassOptionsToPackage{
+%   DIV  = 12,    % TODO: Make configurable
+%   BCOR = 10mm,  % TODO: Make configurable
+% }{typearea}
 
 \LoadClass[a4paper,
-           twoside,
-           11pt,
+           % twoside,
+           oneside,
+           12pt,
            cleardoublepage=empty,
            numbers=noenddot,
            titlepage,
            toc=bibliography,
            toc=index,]{scrbook}
+
+\RequirePackage[left=2cm,right=2cm,top=2cm,bottom=2.54cm]{geometry}
 
 \RequirePackage{iftex}
 \newif\ifxetexorluatex\xetexorluatexfalse
@@ -37,6 +40,7 @@
 % language is used to control standard hyphenation.
 \usepackage[ngerman,french,english]{babel}
 
+\RequirePackage{minted}
 \RequirePackage[autostyle=true]{csquotes} % Context-sensitive quotation marks
 \RequirePackage{makeidx}  % For creating indices
 \RequirePackage{xspace}   % For automatically "eating" spaces
