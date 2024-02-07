@@ -1,10 +1,10 @@
 \NeedsTeXFormat{LaTeX2e}
 \ProvidesClass{mimosis}[2017/08/01 Minimal modern thesis class]
 
-% \PassOptionsToPackage{
-%   DIV  = 12,    % TODO: Make configurable
-%   BCOR = 10mm,  % TODO: Make configurable
-% }{typearea}
+\PassOptionsToPackage{
+  DIV  = 15,    % TODO: Make configurable
+  % BCOR = 10mm,  % TODO: Make configurable
+}{typearea}
 
 \LoadClass[a4paper,
            % twoside,
@@ -16,7 +16,7 @@
            toc=bibliography,
            toc=index,]{scrbook}
 
-\RequirePackage[left=2cm,right=2cm,top=2cm,bottom=2.54cm]{geometry}
+% \RequirePackage[left=2cm,right=2cm,top=2cm,bottom=2.54cm]{geometry}
 
 \RequirePackage{iftex}
 \newif\ifxetexorluatex\xetexorluatexfalse

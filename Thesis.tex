@@ -2,6 +2,10 @@
 
 \usepackage{metalogo}
 \usepackage[super]{nth}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Some of my favourite personal adjustments
@@ -14,6 +18,12 @@
 % This ensures that I am able to typeset bold font in table while still aligning the numbers
 % correctly.
 \usepackage{etoolbox}
+
+% Centred minted environment
+\usepackage{xpatch,letltxmacro}
+\LetLtxMacro{\cminted}{\minted}
+\let\endcminted\endminted
+\xpretocmd{\cminted}{\RecustomVerbatimEnvironment{Verbatim}{BVerbatim}{}}{}{}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Hyperlinks & bookmarks
@@ -45,7 +55,7 @@
   giveninits   = true,
   hyperref     = true,
   maxbibnames  = 99,
-  maxcitenames = 99,
+  maxcitenames = 1,
   sortcites    = true,
   style        = numeric,
   ]{biblatex}
@@ -69,6 +79,12 @@
   \singlespacing
 \fi
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Index & Glossary
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 \newacronym[description={Common subexpression elimination}]{CSE}{CSE}{common subexpression elimination}
 
 \newglossaryentry{Python}{%
@@ -83,7 +99,7 @@
   sort        = {NumPy},
 }
 
-\makeindex
+% \makeindex
 % \makeglossaries
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

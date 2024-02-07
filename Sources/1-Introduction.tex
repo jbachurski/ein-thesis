@@ -1,7 +1,44 @@
 \chapter{Introduction}
 
+In his Turing Award Lecture, \textit{Notation as a Tool of Thought}, Iverson argues for the importance of language design in programming \cite{iverson2007notation}. The \textit{array programming model} he introduced in \textit{APL} is still present today thanks to its performance and conciseness. The ideas presented by it were revolutionary, particularly the brevity of the language and expressiveness despite its relatively simple grammar. It contrasts with other numeric languages, such as FORTRAN -- as Smillie describes in \textit{Discovering Array Languages} \cite{smillie2000lecture}. 
+
+APL's ideas certainly stood the test of time in its various implementations and other languages it influenced, such as J or MatLab. But this begs the question -- is the model still appropriate for use in modern applications such as deep learning, or is there need for a new notation?
+
 \section{Motivation}
 
-\section{Previous art}
+When I found myself in a team working on a deep learning research project, I was shocked to see novel model architectures attract Python implementations such as \href{https://github.com/google-deepmind/clrs/blob/8697f51663bd77548f4b3108816c84d163883361/clrs/_src/processors.py#L140}{this one}:
+\begin{center} \begin{minipage}{0.65\textwidth}
+\begin{minted}{python}
+logits = (
+    transpose(att_1, (0, 2, 1, 3)) +  # + [B, H, N, 1]
+    transpose(att_2, (0, 2, 3, 1)) +  # + [B, H, 1, N]
+    transpose(att_e, (0, 3, 1, 2)) +  # + [B, H, N, N]
+    expand_dims(att_g, axis=-1)       # + [B, H, 1, 1]
+)                                     # = [B, H, N, N]
+coefs = softmax(leaky_relu(logits) + bias_mat, axis=-1)
+ret = matmul(coefs, values)  # [B, H, N, F]
+ret = transpose(ret, (0, 2, 1, 3))  # [B, N, H, F]
+ret = reshape(ret, ret.shape[:-2] + (self.out_size,))  # [B, N, H*F]
+\end{minted}
+\end{minipage} \end{center}
+Problems found in this snippet are hardly unique to it, and can be summarised as a failure of the notation and its underlying paradigm. The code was difficult to write and is not much easier to read, there are plenty of cryptic parameters that are \textit{probably correct}, and it was necessary to add code comments. \textcite{paszke2021getting} argue why the array programming model might not be an apt abstraction for modern workflows. Though there are certainly benefits, such as the abundant parallelism present and usually good behaviour under automatic differentiation, there are also shortcomings. The notation is often too explicit while also being too weakly constrained and unsafe, leading to unmaintainable code. 
+
+At the same time, the deep learning ecosystem is extremely centralised in the paradigms applied -- nearly all research and a significant part of engineering takes place in Python in a select few frameworks. These frameworks -- PyTorch, TensorFlow, Jax -- all derive from NumPy, which also embraces the array programming model. Even attempts at interoperability like the ONNX standard end up using the same paradigm, preserving the status quo \cite{jin2020compiling}. This makes implementing compilers unexpectedly hard, leading to the introduction of different intermediate representations, posing challenges in translation \cite{feng2023tensorir}. The deep learning ecosystem is also constantly evolving, with new operations and hardware targets constantly developed, making for a colossal engineering effort.
+
+\newpage
+\section{Prior art}
+
+Typical examples of languages used for numeric programming include C/C++, FORTRAN, or Julia. They tend to have some influences from APL, but are primarily performance-focused imperative languages -- which do grant higher degree of control at the expense of the need for more challenging compilation schemes to produce efficient programs \cite{grosser2012polly}. Importantly, these languages are seldom applied in deep learning directly, and if at all they are called from Python via its foreign function interface.
+% C/C++ are exceptions to the rule, due to their interoperability with Python and impact on GPGPU programming -- hence much of the numerical heavy-lifting is done with them. 
+
+Issues of the array programming model have not gone unnoticed in the Python community. Many of the problems revolve around high-dimensional arrays which are commonplace in the domain. And similar to Iverson's approach, mathematical notation was sought after as an inspiration -- in this case, \textit{Einstein summation}. Initially limited approaches in Python such as \textit{Tensor Comprehensions} \cite{vasilache2018tensor} and \texttt{einops} \cite{rogozhnikov2021einops} can be seen as the emergence of \textbf{pointful array programming}. This paradigm -- exemplified by the Dex language \cite{paszke2021getting} -- aims to fix many problems of the established model, taking centre stage in this project. 
 
 \section{Aims}
+
+The main aim of the project is design and implementation of a domain-specific language that addresses problems of the array programming model in a practical manner. This meant that:
+\begin{itemize}
+    \item The designed language needs to show improvement of notation on a selection of problems. There is a tool for every problem, and often we can improve on the array programming model. It should be general enough to avoid awkward code switching and build on a formal foundation.
+    \item Since Python is such an important aspect of the target domain, the finished product needs to be easy-to-use in it. Attention should be paid to practicality and a good programmer experience.
+    \item Compiling array code in general is a solved problem, but targeting new architectures and implementing hardware-specific optimisations requires significant effort. The best approach is to capitalise on existing efforts in established projects.
+\end{itemize}
+Based on these criteria, I chose to shallow-embed a new pointful array language in Python, and to compile it to calls in the NumPy library, in a fashion that can be generalised to other frameworks.

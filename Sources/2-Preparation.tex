@@ -4,53 +4,181 @@
 
 \subsection{Array programming model in NumPy}
 
-Much of today's deep learning and scientific computing workflows takes place in the \textit{array programming model}, as introduced in APL by \textcite{iverson1962programming}. The leading Python library for efficiently processing multidimensional arrays, NumPy, is no exception. 
+Much of today's deep learning and scientific computing workflows takes place in the \textit{array programming model}, as introduced in APL by \textcite{iverson1962programming}. A key notion underlying this style is \textbf{whole-array operations}. The leading Python library for efficiently processing multidimensional arrays, NumPy, is no exception \cite{harris2020array}. NumPy focuses on execution on CPUs and its operations are implemented in highly-optimised C and C++, and plays a central rule in numeric programming across the entire Python ecosystem. The core data structure is the \texttt{\textbf{ndarray}} -- a multidimensional rectangular array of primitive values (e.g. floating point numbers). Throughout this work we refer to these as just \textit{arrays}. 
+% Some sources use the name \textit{tensors}.
 
-\subsubsection{Broadcasting} \textbf{Universal functions} (ufuncs)
+We now introduce common terms when dealing with arrays. The number of dimensions of an array is called its \textit{rank}. We call arrays of rank 0  -- scalars, rank 1 -- vectors, and rank 2 -- matrices. Rectangular arrays have a consistent size in every axis, and as such have a \textit{shape}, which is a tuple of natural numbers the same length as the rank of the array. Indexing into an array $a$ of shape $(d_1, ... d_k) \in \mathbb{N}^k$ is defined for exactly the indices $(i_1, ..., i_k) \in \mathbb{N}^k$ such that $0 \le i_p < d_p$, and is usually denoted $a[i_1, ..., i_k]$.
 
-\subsubsection{Shape manipulation}
+\begin{figure}[h]
+    \centering
+    $$ \begin{pmatrix}
+    0 & 1 & \\
+    0 & 1 & 2
+    \end{pmatrix} \text{ is not a rectangular array.} $$
+    $$ A = \begin{bmatrix}
+        1 & 2 & 3 \\ 
+        4 & 5 & 6
+    \end{bmatrix} \quad \mathrm{shape}(A) = (2, 3)  \quad \mathrm{rank}(A) = \mathrm{length}\left(\mathrm{shape}(A)\right) = 2 \quad A[0, 2] = 3 $$
+    \caption{Examples of array concepts}
+    \label{fig:array-examples}
+\end{figure}
 
-\subsubsection{Reductions}
+\subsubsection{NumPy Programming} 
+
+We now give a quick rundown of the key features of NumPy. This finds many parallels in other DSLs impacted by APL, and particularly the Python deep learning frameworks which directly derive from NumPy. Efficiency of these primitives relies on the use of \textbf{strides} \cite{harris2020array} -- we treat this as an implementation detail.
+
+\paragraph{Broadcasting}
+
+
+
+\paragraph{Shape manipulation}
+
+\paragraph{Reductions}
+
+\subsubsection{Note on jagged arrays}
+
+\textit{Jagged} (i.e. non-rectangular) arrays are used much less often than their counterpart, as they cause irregular parallelism, which is tough to implement generally and efficiently. NumPy and similar frameworks forbid them entirely. This is not unprecedented -- the same constraint is present in other array languages such as Futhark, and type-level preservation of rectangular arrays can be seen as one of the core features of the dependent type system in Dex.
 
 \subsection{Pointful array programming}
 
+In functional programming, one can distinguish a \textbf{point-free} (tacit, or ``pointless'') style and contrast it with the typical \textbf{pointful} one. This distinction essentially considers whether data flow is given by variable names, or driven with combinators. A classical theoretical example is that of $\lambda$ and SKI calculi, which are respectively pointful and point-free. Both have the same expressive power, but it is known that compiling $\lambda$ to SKI \textit{(bracket abstraction)} incurs an overhead, which is dependent on the expressiveness of the combinators \cite{lachowski2018complexity}. 
+In essence, one can see the main result of this work as bracket abstraction for array programs.
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}{.3\textwidth}
+  \centering
+    \begin{cminted}{haskell}
+sum = foldr (+) 0
+    \end{cminted}
+      \caption{Point-free}
+\end{subfigure}%
+\begin{subfigure}{.3\textwidth}
+  \centering
+  \begin{cminted}{haskell}
+sum [] = 0
+sum (x:xs) = x + sum xs
+  \end{cminted}
+  \caption{Pointful}
+\end{subfigure}
+\caption{Point-free and pointful styles of a Haskell \texttt{sum} function}
+\label{fig:point-haskell}
+\end{figure}
+
+In the context of this work we draw a similar distinction in array programming as \textcite{paszke2021getting} -- the array programming model is \textit{point-free}, because we reason on whole arrays and stylistically do not operate on individual indices. In contrast, \textit{pointful} array programming shall allow us to reason more explicitly about single elements in arrays. This pushes indexing operations to the fore-front and, at the very least, yields a stylistic 
+improvement that brings us closer to \textbf{mathematical 
+notation}.
+
+\begin{figure}[h]
+\centering
+\begin{subfigure}{.4\textwidth}
+  \centering
+    \begin{cminted}{python}
+c = multiply(
+  transpose(a, (1, 0)),
+  expand_dims(b, 1))
+    \end{cminted}
+      \caption{Point-free NumPy}
+\end{subfigure}%
+\begin{subfigure}{.4\textwidth}
+  \centering
+  \begin{cminted}{haskell}
+
+c = for i j. a.j.i * b.j
+  
+  \end{cminted}
+  \caption{Pointful Dex}
+\end{subfigure}
+\caption{Point-free and pointful array programs in NumPy and Dex}
+\label{fig:point-arrays}
+\end{figure}
+
+
 \subsubsection{Einstein summation}
 
-\subsubsection{Dex}
+\subsubsection{Languages}
 
-\subsection{Role of Python}
+This section does not aim to be  \textbf{Dex} is likely the best modern example of a pointful array language. It features a value-dependent type system for keeping track of array sizes, and embraces the various parallels between arrays and functions. Its main shortcoming is its bespoke LLVM compiler and need to write binding code with other frameworks, both of which introduce friction when using it in practice.
 
-\subsection{Mapping to hardware}
+It is worth is worth to mention the $\tilde{F}$ calculus introduced by \textcite{shaikhha2019efficient}. After extensions to the Phi calculus introduced in the proposal for this project, it was discovered that it bears close resemblance, and as such has been a major influence. However, it does not have an open implementation, and its proposed compiler relies on C code generation. Lastly, the array comprehensions of Single-Assignment~C can be seen as a precursor feature of pointful array programming \cite{scholz1994single}. Pointful DSLs often feature comprehension-like constructs, which are prevalent in modern programming languages generally (e.g. Python and Haskell). 
 
-\subsection{Other approaches}
+% \subsection{Mapping to hardware}
 
-\subsubsection{Named tensors}
+% \subsection{Other approaches}
 
-\subsubsection{Functional -- Futhark}
+% \subsubsection{Functional}
 
-\subsubsection{Macro-based}
+% \subsubsection{Named tensors}
+
+% \subsubsection{Macro-based}
 
 \section{Domain-specific languages}
 
+The practice of creating domain-specific languages (DSLs) has a long history \cite{hudak1996building}. General programming or even properties such as Turing-completeness or fallibility are not necessary in some contexts. Carefully designing what is possible in the language improves the programming experience and simplifies compilation. 
+
 \subsection{Embeddings}
+
+A domain-specific language can be standalone, wherein it functions independently of the rest and uses its own syntax entirely. However, a dominant approach is \textbf{embedding} them in a host language and taking advantage of the host's syntax. Furthermore, we distinguish two kinds of embeddings: \textit{deep} (where the DSL execution manipulates the syntax tree) and \textit{shallow} (the DSL is executed directly) \cite{gibbons2014folding}. Generally, shallow-embedded languages are much easier to integrate with existing codebases and host language features. In particular, depending on the techniques used, DSL programs become values, and hence the host language programmer can apply metaprogramming techniques to transform them.
 
 \subsubsection{Tracing}
 
-\subsubsection{Operator overloading}
+In the context of Python, a common approach to creating shallow-embedded DSLs is \textbf{tracing}, which has found use in the novel Jax framework as described by \textcite{frostig2018compiling}. A DSL program is enclosed by a function in the host language, and to compile a program the function is \textit{traced} by calling it with placeholder (symbolic) arguments, representing the possible variable inputs. Computations are performed \textit{lazily} on these arguments -- no work is done immediately, and instead a computational graph is constructed. Once the function returns, this graph is captured and the program can be compiled and executed.
+\begin{figure}[ht]
+    \centering
+    [Give an example of tracing here]
+    \caption{Example of tracing in a Python DSL}
+    \label{fig:tracing}
+\end{figure}
+This approach is predictable and leads to a kind of multi-stage programming, wherein before the results are determined, the entire program can first be collected and compiled. Tracing is often combined with function polymorphism (e.g. operator overloading), so that traced programs look as if they were \textit{eager}. A limitation of this approach is that runtime-dependent control flow cannot be traced directly.
 
-\subsection{Python DSLs}
+\section{Functional programming patterns}
 
-\section{Functional programming concepts}
+This work makes use of some patterns that are present in literature on functional programming, as well as languages such as Haskell.
 
-\subsection{Pointful and point-free programming}
+\subsection{Applicative functors}
 
-\url{https://en.wikipedia.org/wiki/Tacit_programming}
+\textcite{mcbride2008applicative} introduced the notion of an \textbf{applicative functor} -- a functional programming pattern that generalises monads and specialises functors -- which is a well-behaved structure that defines certain primitive operations that behave well under composition. One of the central structures introduced in this work is an applicative, and so we introduce these operations here. We say $f$ is an applicative functor if the following operations are defined:
+\begin{itemize}
+    \item $\mathrm{return} : \alpha \to f\,\alpha$
+    \item $\circledast : f\,(\alpha \to \beta) \to f\,\alpha \to f\,\beta $
+\end{itemize}
+These operations must follow the \textit{applicative laws}, which can be seen in the light of homomorphisms in a categorical sense, or just a notion of niceness under function composition. In this work we use a bijectively constructed variation of $\circledast$ (pronounced \textit{apply}), $\mathrm{lift}$:
+\begin{align*}
+\mathrm{lift}_2& : (\alpha \to \beta \to \gamma) \to f\,\alpha \to f\,\beta \to f\,\gamma \\ 
+\mathrm{lift}_2&\,f\,a\,b = (f \circledast a) \circledast b
+\end{align*}
+$\mathrm{lift}$ generalises to arbitrary numbers of function arguments via an analogical construction. Applicatives can be seen as a sort of container or embellishment that allows application of transformations in the same context. Two examples of applicatives, $\mathrm{List}$ and $\mathrm{ZipList}$ are shown on Figure \ref{fig:applicatives}.
+%
+\begin{figure}[h]
+\centering
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \begin{align*}
+\mathrm{return}\,x &= [x] \\
+\mathrm{lift}\,f\,a &= \mathrm{map}\,(\lambda\,(h, x) \ldotp h\,x)\,(f \times a)
+  \end{align*}
+  \caption{$\mathrm{List}$ (nondeterminism) applicative for arbitrary lists \\ -- pairwise application ($\times$ is the Cartesian product for lists)}
+\end{subfigure}%
+\begin{subfigure}{.5\textwidth}
+  \centering
+  \begin{align*}
+\mathrm{return}\,x &= \mathrm{replicate}\,n\,x \\
+\mathrm{lift}\,f\,a &= \mathrm{map}\,(\lambda\,(h, x) \ldotp h\,x)\,(\mathrm{zip}\,f\,a)
+  \end{align*}
+  \caption{$\mathrm{ZipList}$ applicative on lists of fixed length \\ -- respective application}
+\end{subfigure}
+\caption{Examples of applicatives functors}
+\label{fig:applicatives}
+\end{figure}
 
-\subsection{Applicative functor}
+\textit{Representable} or \textit{Naperian} functors are a related notion that generalises array-like collections -- these are also useful abstraction in array programming, as shown by \textcite{gibbons2016aplicative}. However, the structure we describe later on is a bit more general, so we do not go into detail here.
 
-\subsection{Representable functor}
+\subsection{Monoids}
 
-\subsection{Total programming}
+A \textbf{monoid} is an algebraic structure defined through an associative operation $\oplus$ (concatenation) and identity element $\varepsilon$, i.e.:
+$$ (a \oplus b) \oplus c = a \oplus (b \oplus c) \quad a \oplus \varepsilon = \varepsilon \oplus a = a $$
+Monoids are an extremely important abstraction in parallel programming particularly thanks to the associativity property, thanks to which computation of \textit{reductions} can be efficiently parallelised via various work partitioning patterns. A simple divide-and-conquer halving pattern could be written as:
+$$ \bigoplus_{i=1}^{2n} f(i) = \bigoplus_{i=1}^{n} f(i) \oplus \bigoplus_{i=n+1}^{2n} f(i) $$
 
 \section{Compiler techniques}
 
@@ -62,9 +190,9 @@ Much of today's deep learning and scientific computing workflows takes place in 
 
 \subsection{Equivalence classes}
 
-\subsection{Abstract interpretation}
+The analysis used in this work can be seen as a special case of the term-equality judgement used in dependently-typed systems.
 
-\subsection{Dependent types}
+\subsection{Abstract interpretation}
 
 \section{Starting point}
 
