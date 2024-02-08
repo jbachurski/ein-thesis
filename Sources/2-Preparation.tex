@@ -4,11 +4,10 @@
 
 \subsection{Array programming model in NumPy}
 
-Much of today's deep learning and scientific computing workflows takes place in the \textit{array programming model}, as introduced in APL by \textcite{iverson1962programming}. A key notion underlying this style is \textbf{whole-array operations}. The leading Python library for efficiently processing multidimensional arrays, NumPy, is no exception \cite{harris2020array}. NumPy focuses on execution on CPUs and its operations are implemented in highly-optimised C and C++, and plays a central rule in numeric programming across the entire Python ecosystem. The core data structure is the \texttt{\textbf{ndarray}} -- a multidimensional rectangular array of primitive values (e.g. floating point numbers). Throughout this work we refer to these as just \textit{arrays}. 
+Much of today's deep learning and scientific computing workflows takes place in the \textit{array programming model}, as introduced in APL by \textcite{iverson1962programming}. A key notion underlying this style is \textbf{whole-array operations}. The leading Python library for efficiently processing multidimensional arrays, NumPy, is no exception \cite{harris2020array}. NumPy focuses on CPU execution implemented in highly-optimised C, playing a central rule in numeric programming across the entire Python ecosystem. NumPy is motivated by the Python runtime's significant overheads (as it is dynamically typed and interpreted), so offloading to calls with large units of work is a lucrative approach. The core data structure is the \texttt{\textbf{ndarray}} -- a multidimensional rectangular array of primitive values (e.g. floating point numbers). Throughout this work we refer to these as just \textit{arrays}. 
 % Some sources use the name \textit{tensors}.
 
-We now introduce common terms when dealing with arrays. The number of dimensions of an array is called its \textit{rank}. We call arrays of rank 0  -- scalars, rank 1 -- vectors, and rank 2 -- matrices. Rectangular arrays have a consistent size in every axis, and as such have a \textit{shape}, which is a tuple of natural numbers the same length as the rank of the array. Indexing into an array $a$ of shape $(d_1, ... d_k) \in \mathbb{N}^k$ is defined for exactly the indices $(i_1, ..., i_k) \in \mathbb{N}^k$ such that $0 \le i_p < d_p$, and is usually denoted $a[i_1, ..., i_k]$.
-
+We now introduce common terms when dealing with arrays. The number of dimensions of an array is called its \textit{rank}. We call arrays of rank 0  -- scalars, rank 1 -- vectors, and rank 2 -- matrices. Rectangular arrays have a consistent size in every dimension (\textit{axis}), and as such have a \textit{shape}, which is a tuple of natural numbers the same length as the rank of the array. Indexing into an array $a$ of shape $(d_1, ... d_k) \in \mathbb{N}^k$ is defined for exactly the indices $(i_1, ..., i_k) \in \mathbb{N}^k$ such that $0 \le i_p < d_p$, and is usually denoted $a[i_1, ..., i_k]$.
 \begin{figure}[h]
     \centering
     $$ \begin{pmatrix}
@@ -25,19 +24,53 @@ We now introduce common terms when dealing with arrays. The number of dimensions
 
 \subsubsection{NumPy Programming} 
 
-We now give a quick rundown of the key features of NumPy. This finds many parallels in other DSLs impacted by APL, and particularly the Python deep learning frameworks which directly derive from NumPy. Efficiency of these primitives relies on the use of \textbf{strides} \cite{harris2020array} -- we treat this as an implementation detail.
+We now give a rundown of the key features of NumPy. There are many parallels in other APL-like DSLs, but particularly Python's deep learning frameworks. Efficiency of these primitives relies on the use of \textbf{strides} \cite{harris2020array} in the \texttt{ndarray} representation -- we treat this as an implementation detail.
 
 \paragraph{Broadcasting}
 
+The first whole-array operation one might come up with is an \textbf{elementwise operator}:
+$$ \begin{bmatrix} 1 & 2 \\ 3 & 4 \end{bmatrix} 
++ \begin{bmatrix}1 & -1 \\ -1 & 1 \end{bmatrix}
+= \begin{bmatrix}1 + 1 & 2 - 1 \\ 3 - 1 & 4 + 1 \end{bmatrix}
+= \begin{bmatrix}2 & 1 \\ 2 & 5 \end{bmatrix} $$
+\textit{Pointfully}, we define its action on matrices as $C = A + B \Leftrightarrow C[i, j] = A[i, j] + B[i, j]$ for all valid $i, j$. The relevant primitive is \texttt{numpy.add}. Elementwise operations assert operands are of the same shape.
 
+But what about the case where arrays don't match shape exactly? A common mathematical operation might be scaling a matrix, i.e. $L = \lambda A$, defined $L[i, j] = \lambda \cdot A[i, j]$. \textbf{Broadcasting} generalises elementwise operations to the case where only a subset of axes is present in each array. NumPy approaches this by \textit{matching up respective axes of size 1} (which can be unambiguously indexed with $0$). For instance, consider the outer product $C = a \otimes b$ ($C[i, j] = a[i] \cdot b[j] $). NumPy requires that $a$ and $b$ are shaped as a row vector and column vector respectively, i.e. $\mathrm{shape}(a) = (n, 1)$ and $\mathrm{shape}(b) = (1, m)$. Then:
+$$ C = \texttt{multiply}(a, b) \iff C[i, j] = a[i, {\color{blue} j}] \cdot b[{\color{blue} i}, j] = a[i, 0] \cdot b[0, j] $$
+Thanks to broadcasting, we avoid copying the data caused by repeating the arrays along an axis explicitly. However, the main drawback is just how dynamic and difficult to formalise this is. The condition of matching up axes of size $d$ and $d'$ is a somewhat tricky statement of $d = d' \lor d = 1 \lor d' = 1 $.
+Not only that, but without any information on shapes involved, there are $2^{\mathrm{rank}}$ possible behaviours of a broadcast.
 
-\paragraph{Shape manipulation}
+\paragraph{Shape manipulation} But how do we obtain arrays in a form suitable for computing the required operation with broadcasting? NumPy offers various primitives that efficiently change the shape of an array without copying its data (thanks to strides). Say that in the above example $a$ and $b$ were just vectors. Then we may use \texttt{numpy.expand\_dims} with the axis index to add:
+\begin{align*}
+&\mathrm{shape}(a) = (n) \implies \mathrm{shape}(\texttt{expand\_dims}(a, 1)) = (n, 1) \\
+&c = a \otimes b = \texttt{multiply} \left( \texttt{expand\_dims}(a, 1), \texttt{expand\_dims}(b, 0) \right)
+\end{align*}
+It is worth noting that the inverse of \texttt{expand\_dims} (a.k.a. \texttt{unsqueeze}) is \texttt{squeeze}. Now consider $C = A + A^T$ ($C[i, j] = A[i, j] + A[j, i]$). NumPy offers the \texttt{transpose} primitive that permutes axes:
+\begin{align*}
+&A^T = \texttt{numpy.transpose}(A, (1, 0)) \iff A^T[i, j] = A[j, i] \\
+&C = A + A^T = \texttt{numpy.add}(A, A^T) = \texttt{numpy.add}(A, \texttt{numpy.transpose}(A, (1, 0))) 
+\end{align*}
+All of these primitives generalise to multiple dimension, with the main problem being the axis-indexing parameters they use, as they get longer and more difficult to reason about. A common practice is writing all functions with the assumptions of a \textit{batch} axis, which may be used to effectively \textit{map} (in a functional sense) the function over a vector of examples. Where this is unnecessary, an axis of size 1 is passed instead.
 
 \paragraph{Reductions}
 
+One might notice that the operations we've described so far can only produce \textit{more} data. Though the paradigm does not forbid simply looping over the data to accumulate it, the idiomatic approach is to use a \textit{reduction}. To compute a tropical matrix product, we use \texttt{numpy.min} with an axis index:
+\begin{align*}
+&C[i, j] = \min_k A[i, k] + B[k, j] \\
+&C = \texttt{min} \left( \texttt{add}(\texttt{expand\_dims}(A, 1), \texttt{expand\_dims}(A, 0), 1 \right)
+\end{align*}
+
+\paragraph{Generality} NumPy is said to be a \textbf{first-order} interface, since primitives cannot be parametrised with functions. As such, only some operations can be broadcast or reduced with. This leads to limitations of what operations can be expressed efficiently. If not for \texttt{numpy.argmax} (index of maximum), one would be forced to use a Python loop, like:
+\begin{center}
+\begin{cminted}{python}
+for i in range(a.shape[axis]): if a[i] > a[p]: p = i
+\end{cminted}
+\end{center}
+Due to Python's inherent runtime overheads, this would be much slower than a native implementation.
+
 \subsubsection{Note on jagged arrays}
 
-\textit{Jagged} (i.e. non-rectangular) arrays are used much less often than their counterpart, as they cause irregular parallelism, which is tough to implement generally and efficiently. NumPy and similar frameworks forbid them entirely. This is not unprecedented -- the same constraint is present in other array languages such as Futhark, and type-level preservation of rectangular arrays can be seen as one of the core features of the dependent type system in Dex.
+\textit{Jagged} (non-rectangular) arrays are used less often than their counterpart. They cause irregular parallelism, which is difficult to implement efficiently. NumPy and similar frameworks forbid them entirely. This is not unprecedented -- the same constraint is present in the Futhark array language \cite{henriksen2017futhark}, and preservation of rectangular arrays can be seen as one of the core features of the dependent type system in Dex.
 
 \subsection{Pointful array programming}
 
@@ -65,9 +98,8 @@ sum (x:xs) = x + sum xs
 \label{fig:point-haskell}
 \end{figure}
 
-In the context of this work we draw a similar distinction in array programming as \textcite{paszke2021getting} -- the array programming model is \textit{point-free}, because we reason on whole arrays and stylistically do not operate on individual indices. In contrast, \textit{pointful} array programming shall allow us to reason more explicitly about single elements in arrays. This pushes indexing operations to the fore-front and, at the very least, yields a stylistic 
-improvement that brings us closer to \textbf{mathematical 
-notation}.
+In the context of this work we draw a similar distinction in array programming as \textcite{paszke2021getting} -- the array programming model is \textit{point-free}, because we reason on whole arrays and stylistically do not operate on individual indices. In contrast, \textit{pointful} (or \textit{index-oriented}) array programming allows us to reason about array elements as explicit functions of indices. This pushes indexing operations to the fore-front and, at the very least, yields a stylistic improvement that brings us closer to \textbf{mathematical 
+notation} -- as per Iverson.
 
 \begin{figure}[h]
 \centering
@@ -96,11 +128,22 @@ c = for i j. a.j.i * b.j
 
 \subsubsection{Einstein summation}
 
+The need for a better notation for multidimensional operations became evident. For inspiration, the Python community looked towards \textbf{Einstein summation} -- a notation used in physics for expressing linear algebra in an index-oriented fashion. Briefly, indices which are repeated are implicitly summed over, and all indices span over the full size of the indexed axis \cite{aahlander2002einstein}. A matrix product would be written as:
+$$ C_{i,j} = A_{i,k} B_{k,j} \iff C = AB $$
+Einstein notation was the main influence on the \texttt{numpy.einsum} function (a stringly-typed DSL), where the above is computed by \mintinline{python}{einsum("ij,jk->ik", a, b)}. The idea was expanded in Tensor Comprehensions \cite{vasilache2018tensor}, and more recently in \texttt{einops} \cite{rogozhnikov2021einops}, which primarily allows index-oriented shape manipulations, e.g.:
+\begin{center}
+\begin{cminted}{python}
+expand_dims(transpose(x, (0, 3, 1, 2)), 4) == einops.rearrange(x, "b h w c -> b c h w ()")
+\end{cminted}
+\end{center}
+Non-Python projects include Taco \cite{kjolstad2017tensor} and the Tullio macro in Julia.
+
+
 \subsubsection{Languages}
 
-This section does not aim to be  \textbf{Dex} is likely the best modern example of a pointful array language. It features a value-dependent type system for keeping track of array sizes, and embraces the various parallels between arrays and functions. Its main shortcoming is its bespoke LLVM compiler and need to write binding code with other frameworks, both of which introduce friction when using it in practice.
+This section considers \textit{some} pointful array languages influential on the project. \textbf{Dex} is likely the best modern example. It features a value-dependent type system for keeping track of array sizes, and embraces the parallels between arrays and functions. The main shortcomings are the bespoke LLVM compiler and need for binding code for other frameworks, both of which introduce friction in practical use.
 
-It is worth is worth to mention the $\tilde{F}$ calculus introduced by \textcite{shaikhha2019efficient}. After extensions to the Phi calculus introduced in the proposal for this project, it was discovered that it bears close resemblance, and as such has been a major influence. However, it does not have an open implementation, and its proposed compiler relies on C code generation. Lastly, the array comprehensions of Single-Assignment~C can be seen as a precursor feature of pointful array programming \cite{scholz1994single}. Pointful DSLs often feature comprehension-like constructs, which are prevalent in modern programming languages generally (e.g. Python and Haskell). 
+It is worth to mention the $\tilde{F}$ calculus introduced by \textcite{shaikhha2019efficient}. After extensions to the Phi calculus introduced in the proposal for this project, I discovered that it bears close resemblance, and as such has been an influence on further work. However, it does not have an open implementation, and its proposed compiler relies on C code generation. Lastly, the array comprehensions of Single-Assignment~C can be seen as a precursor feature of pointful array programming \cite{scholz1994single}. Pointful DSLs often feature comprehension-like constructs, which are prevalent in modern programming languages generally (e.g. Python and Haskell). 
 
 % \subsection{Mapping to hardware}
 
@@ -118,7 +161,9 @@ The practice of creating domain-specific languages (DSLs) has a long history \ci
 
 \subsection{Embeddings}
 
-A domain-specific language can be standalone, wherein it functions independently of the rest and uses its own syntax entirely. However, a dominant approach is \textbf{embedding} them in a host language and taking advantage of the host's syntax. Furthermore, we distinguish two kinds of embeddings: \textit{deep} (where the DSL execution manipulates the syntax tree) and \textit{shallow} (the DSL is executed directly) \cite{gibbons2014folding}. Generally, shallow-embedded languages are much easier to integrate with existing codebases and host language features. In particular, depending on the techniques used, DSL programs become values, and hence the host language programmer can apply metaprogramming techniques to transform them.
+A domain-specific language can be standalone, wherein it functions independently of the rest and uses its own syntax entirely. However, a refined approach is \textbf{embedding} them in a host language and taking advantage of the host's syntax. Furthermore, we distinguish two kinds of embeddings: \textit{deep} (where the DSL manipulates the host's syntax tree) and \textit{shallow} (the DSL is executed directly) \cite{gibbons2014folding}. 
+Generally, shallow-embedded languages are much easier to integrate with existing codebases and host language features. In particular, depending on the techniques used, DSL programs become values, and hence the host language programmer can apply metaprogramming techniques to transform them. 
+A special case of a deep-embedding is a \textit{stringly-typed} DSL, meaning that programs are expressed in (preferably short) strings which are parsed at runtime. A major example is the \texttt{einops} Python package.
 
 \subsubsection{Tracing}
 
@@ -129,11 +174,9 @@ In the context of Python, a common approach to creating shallow-embedded DSLs is
     \caption{Example of tracing in a Python DSL}
     \label{fig:tracing}
 \end{figure}
-This approach is predictable and leads to a kind of multi-stage programming, wherein before the results are determined, the entire program can first be collected and compiled. Tracing is often combined with function polymorphism (e.g. operator overloading), so that traced programs look as if they were \textit{eager}. A limitation of this approach is that runtime-dependent control flow cannot be traced directly.
+This approach is predictable and leads to a kind of multi-stage programming, wherein before the results are determined, the entire program can first be collected and compiled. Tracing is often combined with techniques such as operator overloading, so that traced programs are written if they were \textit{eager}. A limitation of this approach is that runtime-dependent control flow cannot be traced directly.
 
 \section{Functional programming patterns}
-
-This work makes use of some patterns that are present in literature on functional programming, as well as languages such as Haskell.
 
 \subsection{Applicative functors}
 
@@ -142,12 +185,12 @@ This work makes use of some patterns that are present in literature on functiona
     \item $\mathrm{return} : \alpha \to f\,\alpha$
     \item $\circledast : f\,(\alpha \to \beta) \to f\,\alpha \to f\,\beta $
 \end{itemize}
-These operations must follow the \textit{applicative laws}, which can be seen in the light of homomorphisms in a categorical sense, or just a notion of niceness under function composition. In this work we use a bijectively constructed variation of $\circledast$ (pronounced \textit{apply}), $\mathrm{lift}$:
+These operations must follow the \textit{applicative laws}, which can be seen in the light of homomorphisms in a categorical sense, or just a notion of niceness under function composition. In this work we use a bijectively constructed variation of $\circledast$ (pronounced \textit{apply}), called $\mathrm{lift}$:
 \begin{align*}
 \mathrm{lift}_2& : (\alpha \to \beta \to \gamma) \to f\,\alpha \to f\,\beta \to f\,\gamma \\ 
 \mathrm{lift}_2&\,f\,a\,b = (f \circledast a) \circledast b
 \end{align*}
-$\mathrm{lift}$ generalises to arbitrary numbers of function arguments via an analogical construction. Applicatives can be seen as a sort of container or embellishment that allows application of transformations in the same context. Two examples of applicatives, $\mathrm{List}$ and $\mathrm{ZipList}$ are shown on Figure \ref{fig:applicatives}.
+One further generalises $\mathrm{lift}$ to arbitrary numbers of function arguments via an analogical construction. Applicatives can be seen as a sort of embellishment of values that allows application of similarly embellished transformations. Two examples of applicatives -- $\mathrm{List}$ and $\mathrm{ZipList}$ -- are shown on Figure \ref{fig:applicatives}.
 %
 \begin{figure}[h]
 \centering
@@ -165,20 +208,20 @@ $\mathrm{lift}$ generalises to arbitrary numbers of function arguments via an an
 \mathrm{return}\,x &= \mathrm{replicate}\,n\,x \\
 \mathrm{lift}\,f\,a &= \mathrm{map}\,(\lambda\,(h, x) \ldotp h\,x)\,(\mathrm{zip}\,f\,a)
   \end{align*}
-  \caption{$\mathrm{ZipList}$ applicative on lists of fixed length \\ -- respective application}
+  \caption{$\mathrm{ZipList}$ applicative on lists of fixed length $n$ \\ -- respective application}
 \end{subfigure}
 \caption{Examples of applicatives functors}
 \label{fig:applicatives}
 \end{figure}
 
-\textit{Representable} or \textit{Naperian} functors are a related notion that generalises array-like collections -- these are also useful abstraction in array programming, as shown by \textcite{gibbons2016aplicative}. However, the structure we describe later on is a bit more general, so we do not go into detail here.
+\textit{Representable} \textit{(Naperian)} functors are a stronger notion that generalises indexed collections -- these are also useful abstraction in array programming, as shown by \textcite{gibbons2016aplicative}. However, the structure we describe later on is a bit stronger yet, so we do not go into detail here.
 
-\subsection{Monoids}
+% \subsection{Monoids}
 
-A \textbf{monoid} is an algebraic structure defined through an associative operation $\oplus$ (concatenation) and identity element $\varepsilon$, i.e.:
-$$ (a \oplus b) \oplus c = a \oplus (b \oplus c) \quad a \oplus \varepsilon = \varepsilon \oplus a = a $$
-Monoids are an extremely important abstraction in parallel programming particularly thanks to the associativity property, thanks to which computation of \textit{reductions} can be efficiently parallelised via various work partitioning patterns. A simple divide-and-conquer halving pattern could be written as:
-$$ \bigoplus_{i=1}^{2n} f(i) = \bigoplus_{i=1}^{n} f(i) \oplus \bigoplus_{i=n+1}^{2n} f(i) $$
+% A \textbf{monoid} is an algebraic structure defined through an associative operation $\oplus$ (concatenation) and identity element $\varepsilon$, i.e.:
+% $$ (a \oplus b) \oplus c = a \oplus (b \oplus c) \quad a \oplus \varepsilon = \varepsilon \oplus a = a $$
+% Monoids are an extremely important abstraction in parallel programming particularly thanks to the associativity property, thanks to which computation of \textit{reductions} can be efficiently parallelised via various work partitioning patterns. A simple divide-and-conquer halving pattern could be written as:
+% $$ \bigoplus_{i=1}^{2n} f(i) = \bigoplus_{i=1}^{n} f(i) \oplus \bigoplus_{i=n+1}^{2n} f(i) $$
 
 \section{Compiler techniques}
 

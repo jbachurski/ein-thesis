@@ -112,6 +112,7 @@
 
 \begin{document}
 
+%TC:ignore
 \frontmatter
   \include{Sources/Title}
   % \include{Sources/Declaration}
@@ -142,11 +143,13 @@
   %   \end{minipage}
   % }
 
+%TC:endignore
   \include{Sources/1-Introduction}
   \include{Sources/2-Preparation}
   \include{Sources/3-Implementation}
   \include{Sources/4-Evaluation}
   \include{Sources/5-Conclusions}
+%TC:ignore
 
   \appendix 
 
@@ -169,4 +172,5 @@
   \printbibliography
   % \printindex
 
+%TC:endignore
 \end{document}

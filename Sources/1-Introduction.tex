@@ -7,6 +7,7 @@ APL's ideas certainly stood the test of time in its various implementations and 
 \section{Motivation}
 
 When I found myself in a team working on a deep learning research project, I was shocked to see novel model architectures attract Python implementations such as \href{https://github.com/google-deepmind/clrs/blob/8697f51663bd77548f4b3108816c84d163883361/clrs/_src/processors.py#L140}{this one}:
+%TC:ignore
 \begin{center} \begin{minipage}{0.65\textwidth}
 \begin{minted}{python}
 logits = (
@@ -21,6 +22,7 @@ ret = transpose(ret, (0, 2, 1, 3))  # [B, N, H, F]
 ret = reshape(ret, ret.shape[:-2] + (self.out_size,))  # [B, N, H*F]
 \end{minted}
 \end{minipage} \end{center}
+%TC:endignore
 Problems found in this snippet are hardly unique to it, and can be summarised as a failure of the notation and its underlying paradigm. The code was difficult to write and is not much easier to read, there are plenty of cryptic parameters that are \textit{probably correct}, and it was necessary to add code comments. \textcite{paszke2021getting} argue why the array programming model might not be an apt abstraction for modern workflows. Though there are certainly benefits, such as the abundant parallelism present and usually good behaviour under automatic differentiation, there are also shortcomings. The notation is often too explicit while also being too weakly constrained and unsafe, leading to unmaintainable code. 
 
 At the same time, the deep learning ecosystem is extremely centralised in the paradigms applied -- nearly all research and a significant part of engineering takes place in Python in a select few frameworks. These frameworks -- PyTorch, TensorFlow, Jax -- all derive from NumPy, which also embraces the array programming model. Even attempts at interoperability like the ONNX standard end up using the same paradigm, preserving the status quo \cite{jin2020compiling}. This makes implementing compilers unexpectedly hard, leading to the introduction of different intermediate representations, posing challenges in translation \cite{feng2023tensorir}. The deep learning ecosystem is also constantly evolving, with new operations and hardware targets constantly developed, making for a colossal engineering effort.
