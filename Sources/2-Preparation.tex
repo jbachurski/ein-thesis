@@ -1,13 +1,13 @@
 \chapter{Preparation}
 
-\section{Array programming}
+This project inherently covers many different areas, as it aims to use methods of programming languages to solve problems faced by deep learning practitioners. A thorough treatment of array programming is given to describe the intricacies of the compilation target. Classical functional programming and compiler techniques are considered, as they come in useful when formulating the compilation scheme and applied optimisations. We also consider an overview of the pointful paradigm and means to embed it in Python as a domain-specific language. The project is largely modular and had many possible directions, and so a robust requirements analysis is shown.
 
-\subsection{Array programming model in NumPy}
+\section{Array programming model}
 
-Much of today's deep learning and scientific computing workflows takes place in the \textit{array programming model}, as introduced in APL by \textcite{iverson1962programming}. A key notion underlying this style is \textbf{whole-array operations}. The leading Python library for efficiently processing multidimensional arrays, NumPy, is no exception \cite{harris2020array}. NumPy focuses on CPU execution implemented in highly-optimised C, playing a central rule in numeric programming across the entire Python ecosystem. NumPy is motivated by the Python runtime's significant overheads (as it is dynamically typed and interpreted), so offloading to calls with large units of work is a lucrative approach. The core data structure is the \texttt{\textbf{ndarray}} -- a multidimensional rectangular array of primitive values (e.g. floating point numbers). Throughout this work we refer to these as just \textit{arrays}. 
+Much of today's deep learning and scientific computing workflows takes place in the \textit{array programming model} of \textcite{iverson1962programming}. A key notion underlying this style is \textbf{whole-array operations}. The leading Python library for efficiently processing multidimensional arrays, NumPy, is no exception \cite{harris2020array}. NumPy focuses on CPU execution and is implemented in highly-optimised C, playing a central rule in numeric programming across the entire Python ecosystem. NumPy's design is motivated by Python's significant runtime overheads (esp. due to dynamic typing). This leads to profitability of offloading to calls with large units of work. The core data structure is the \texttt{\textbf{ndarray}} -- a multidimensional rectangular array of primitive values (e.g. floating point numbers). Throughout this work we refer to these as just \textit{arrays}. 
 % Some sources use the name \textit{tensors}.
 
-We now introduce common terms when dealing with arrays. The number of dimensions of an array is called its \textit{rank}. We call arrays of rank 0  -- scalars, rank 1 -- vectors, and rank 2 -- matrices. Rectangular arrays have a consistent size in every dimension (\textit{axis}), and as such have a \textit{shape}, which is a tuple of natural numbers the same length as the rank of the array. Indexing into an array $a$ of shape $(d_1, ... d_k) \in \mathbb{N}^k$ is defined for exactly the indices $(i_1, ..., i_k) \in \mathbb{N}^k$ such that $0 \le i_p < d_p$, and is usually denoted $a[i_1, ..., i_k]$.
+We now introduce common terms when dealing with arrays. The number of dimensions of an array is called its \textit{rank}. We call arrays of rank 0  -- scalars, rank 1 -- vectors, and rank 2 -- matrices. Rectangular arrays have a consistent size in every dimension (\textit{axis}), and as such have a \textit{shape}, which is a tuple of natural numbers the same length as the rank. Indexing into an array $a$ of shape $(d_0, ... d_{k-1}) \in \mathbb{N}^k$ is defined for exactly the indices $(i_0, ..., i_{k-1}) \in \mathbb{N}^k$ such that $0 \le i_p < d_p$, and is usually denoted $a[i_0, ..., i_{k-1}]$. Axes are indexed from 0, and here we would say that $i_p$ indexes into axis $p$.
 \begin{figure}[h]
     \centering
     $$ \begin{pmatrix}
@@ -17,14 +17,14 @@ We now introduce common terms when dealing with arrays. The number of dimensions
     $$ A = \begin{bmatrix}
         1 & 2 & 3 \\ 
         4 & 5 & 6
-    \end{bmatrix} \quad \mathrm{shape}(A) = (2, 3)  \quad \mathrm{rank}(A) = \mathrm{length}\left(\mathrm{shape}(A)\right) = 2 \quad A[0, 2] = 3 $$
+    \end{bmatrix} \quad \mathrm{shape}(A) = (2, 3)  \quad \mathrm{rank}(A) = 2 \quad A[0, 2] = 3 $$
     \caption{Examples of array concepts}
     \label{fig:array-examples}
 \end{figure}
 
-\subsubsection{NumPy Programming} 
+\subsection{Programming in NumPy} 
 
-We now give a rundown of the key features of NumPy. There are many parallels in other APL-like DSLs, but particularly Python's deep learning frameworks. Efficiency of these primitives relies on the use of \textbf{strides} \cite{harris2020array} in the \texttt{ndarray} representation -- we treat this as an implementation detail.
+We now give a summary of the key features of NumPy. Efficiency of many of the following primitives relies on the use of \textbf{strides} in the \texttt{ndarray} representation \cite{harris2020array} -- we treat this as an implementation detail.
 
 \paragraph{Broadcasting}
 
@@ -33,49 +33,54 @@ $$ \begin{bmatrix} 1 & 2 \\ 3 & 4 \end{bmatrix}
 + \begin{bmatrix}1 & -1 \\ -1 & 1 \end{bmatrix}
 = \begin{bmatrix}1 + 1 & 2 - 1 \\ 3 - 1 & 4 + 1 \end{bmatrix}
 = \begin{bmatrix}2 & 1 \\ 2 & 5 \end{bmatrix} $$
-\textit{Pointfully}, we define its action on matrices as $C = A + B \Leftrightarrow C[i, j] = A[i, j] + B[i, j]$ for all valid $i, j$. The relevant primitive is \texttt{numpy.add}. Elementwise operations assert operands are of the same shape.
+\textit{Pointfully}, we define the action $C = A + B$ on matrices as $C[i, j] = A[i, j] + B[i, j]$ for all valid $i, j$. The relevant primitive is \texttt{numpy.add}. Elementwise operations assert operands are of the same shape.
 
-But what about the case where arrays don't match shape exactly? A common mathematical operation might be scaling a matrix, i.e. $L = \lambda A$, defined $L[i, j] = \lambda \cdot A[i, j]$. \textbf{Broadcasting} generalises elementwise operations to the case where only a subset of axes is present in each array. NumPy approaches this by \textit{matching up respective axes of size 1} (which can be unambiguously indexed with $0$). For instance, consider the outer product $C = a \otimes b$ ($C[i, j] = a[i] \cdot b[j] $). NumPy requires that $a$ and $b$ are shaped as a row vector and column vector respectively, i.e. $\mathrm{shape}(a) = (n, 1)$ and $\mathrm{shape}(b) = (1, m)$. Then:
+But what about the cases where arrays do not have matching shapes? A common mathematical operation might be scaling a matrix, i.e. $L = \lambda A$, defined $L[i, j] = \lambda \cdot A[i, j]$. \textbf{Broadcasting} generalises elementwise operations to the case where only a subset of axes is present in each array. NumPy approaches this by \textit{matching up respective axes of size 1} (as they can be unambiguously indexed with $0$). For instance, consider the outer product $C = a \otimes b$ ($C[i, j] = a[i] \cdot b[j] $). NumPy requires that $a$ and $b$ are shaped as a row vector and column vector respectively, i.e. $\mathrm{shape}(a) = (n, 1)$ and $\mathrm{shape}(b) = (1, m)$. Then:
 $$ C = \texttt{multiply}(a, b) \iff C[i, j] = a[i, {\color{blue} j}] \cdot b[{\color{blue} i}, j] = a[i, 0] \cdot b[0, j] $$
-Thanks to broadcasting, we avoid copying the data caused by repeating the arrays along an axis explicitly. However, the main drawback is just how dynamic and difficult to formalise this is. The condition of matching up axes of size $d$ and $d'$ is a somewhat tricky statement of $d = d' \lor d = 1 \lor d' = 1 $.
+Thanks to broadcasting, we avoid copying the data caused by repeating the arrays along an axis explicitly. However, the main drawback is how dynamic and difficult to formalise this mechanism is. The condition of matching up axes of size $d$ and $d'$ is a somewhat unwieldy propositional statement: $d = d' \lor d = 1 \lor d' = 1 $. Disjunctions are widely known to be difficult to handle in e.g. type inference.
 Not only that, but without any information on shapes involved, there are $2^{\mathrm{rank}}$ possible behaviours of a broadcast.
 
-\paragraph{Shape manipulation} But how do we obtain arrays in a form suitable for computing the required operation with broadcasting? NumPy offers various primitives that efficiently change the shape of an array without copying its data (thanks to strides). Say that in the above example $a$ and $b$ were just vectors. Then we may use \texttt{numpy.expand\_dims} with the axis index to add:
+\paragraph{Shape manipulation} But how do we obtain arrays in a form suitable for computing the required operation with broadcasting? NumPy offers various primitives that efficiently change the shape of an array without copying its data (thanks to using strides). Say that in the above example $a$ and $b$ were just vectors. Then we may use \texttt{numpy.expand\_dims} with the axis index to add:
 \begin{align*}
-&\mathrm{shape}(a) = (n) \implies \mathrm{shape}(\texttt{expand\_dims}(a, 1)) = (n, 1) \\
-&c = a \otimes b = \texttt{multiply} \left( \texttt{expand\_dims}(a, 1), \texttt{expand\_dims}(b, 0) \right)
+&\mathrm{shape}(a) = (n) \implies \mathrm{shape}(\texttt{expand\_dims}(a, \texttt{axis=1})) = (n, 1) \\
+&C = a \otimes b = \texttt{multiply} \left( \texttt{expand\_dims}(a, \texttt{axis=1}), \texttt{expand\_dims}(b, \texttt{axis=0}) \right)
 \end{align*}
 It is worth noting that the inverse of \texttt{expand\_dims} (a.k.a. \texttt{unsqueeze}) is \texttt{squeeze}. Now consider $C = A + A^T$ ($C[i, j] = A[i, j] + A[j, i]$). NumPy offers the \texttt{transpose} primitive that permutes axes:
 \begin{align*}
 &A^T = \texttt{numpy.transpose}(A, (1, 0)) \iff A^T[i, j] = A[j, i] \\
 &C = A + A^T = \texttt{numpy.add}(A, A^T) = \texttt{numpy.add}(A, \texttt{numpy.transpose}(A, (1, 0))) 
 \end{align*}
-All of these primitives generalise to multiple dimension, with the main problem being the axis-indexing parameters they use, as they get longer and more difficult to reason about. A common practice is writing all functions with the assumptions of a \textit{batch} axis, which may be used to effectively \textit{map} (in a functional sense) the function over a vector of examples. Where this is unnecessary, an axis of size 1 is passed instead.
+All of these primitives generalise to multiple dimensions. The main problems are the axis indices and permutations, which get harder to reason about as we generalise to more and more dimensions. 
+% TODO: This should be explicitly compared with Ein, in evaluation?
+% A common practice is writing all programs with arrays possessing an extra \textit{batch} axis, which may be used to effectively \textit{map} (in a functional sense) the function over a vector of examples. Where this is unnecessary, an axis of size 1 is passed instead. 
 
 \paragraph{Reductions}
 
-One might notice that the operations we've described so far can only produce \textit{more} data. Though the paradigm does not forbid simply looping over the data to accumulate it, the idiomatic approach is to use a \textit{reduction}. To compute a tropical matrix product, we use \texttt{numpy.min} with an axis index:
+One might notice operations we have considered so far cannot \textit{accumulate} data. Though the paradigm does not forbid simply looping, the idiomatic approach is a \textit{reduction}. To compute a so-called tropical matrix product,\footnote{The tropical $(\min, +)$ algebra is useful in various shortest path problems on graphs.} we use \texttt{numpy.min}, parametrised by the index of the axis to reduce over:
 \begin{align*}
 &C[i, j] = \min_k A[i, k] + B[k, j] \\
-&C = \texttt{min} \left( \texttt{add}(\texttt{expand\_dims}(A, 1), \texttt{expand\_dims}(A, 0), 1 \right)
+&C = \texttt{min} \left( \texttt{add}(\texttt{expand\_dims}(A, \texttt{axis=1}), \texttt{expand\_dims}(A, \texttt{axis=0}), \texttt{axis=1} \right)
 \end{align*}
 
-\paragraph{Generality} NumPy is said to be a \textbf{first-order} interface, since primitives cannot be parametrised with functions. As such, only some operations can be broadcast or reduced with. This leads to limitations of what operations can be expressed efficiently. If not for \texttt{numpy.argmax} (index of maximum), one would be forced to use a Python loop, like:
+\paragraph{Generality} NumPy could be called a \textbf{first-order} interface, since primitives cannot be parametrised with functions. As such, we can only broadcast and reduce with some operations. This leads to limitations of what can be expressed efficiently. If not for \texttt{numpy.argmax}, one would be forced to use a Python loop:
 \begin{center}
 \begin{cminted}{python}
-for i in range(a.shape[axis]): if a[i] > a[p]: p = i
+p = 0
+for i in range(len(a)): 
+    if a[i] > a[p]: p = i
 \end{cminted}
 \end{center}
-Due to Python's inherent runtime overheads, this would be much slower than a native implementation.
+Though there exist more efficient implementations of the above routine, they are necessarily slower than a native (e.g. C++) implementation. This is due to the overheads caused by using a Python loop.
+% It is worth noting that a framework like Jax does expose custom reductions.
 
-\subsubsection{Note on jagged arrays}
+\subsection{Jagged arrays}
 
 \textit{Jagged} (non-rectangular) arrays are used less often than their counterpart. They cause irregular parallelism, which is difficult to implement efficiently. NumPy and similar frameworks forbid them entirely. This is not unprecedented -- the same constraint is present in the Futhark array language \cite{henriksen2017futhark}, and preservation of rectangular arrays can be seen as one of the core features of the dependent type system in Dex.
 
-\subsection{Pointful array programming}
+\section{Pointful array programming}
 
 In functional programming, one can distinguish a \textbf{point-free} (tacit, or ``pointless'') style and contrast it with the typical \textbf{pointful} one. This distinction essentially considers whether data flow is given by variable names, or driven with combinators. A classical theoretical example is that of $\lambda$ and SKI calculi, which are respectively pointful and point-free. Both have the same expressive power, but it is known that compiling $\lambda$ to SKI \textit{(bracket abstraction)} incurs an overhead, which is dependent on the expressiveness of the combinators \cite{lachowski2018complexity}. 
-In essence, one can see the main result of this work as bracket abstraction for array programs.
+In essence, one can view the main result of this work as bracket abstraction for array programs.
 
 \begin{figure}[h]
 \centering
@@ -98,7 +103,7 @@ sum (x:xs) = x + sum xs
 \label{fig:point-haskell}
 \end{figure}
 
-In the context of this work we draw a similar distinction in array programming as \textcite{paszke2021getting} -- the array programming model is \textit{point-free}, because we reason on whole arrays and stylistically do not operate on individual indices. In contrast, \textit{pointful} (or \textit{index-oriented}) array programming allows us to reason about array elements as explicit functions of indices. This pushes indexing operations to the fore-front and, at the very least, yields a stylistic improvement that brings us closer to \textbf{mathematical 
+In the context of this work we draw a similar distinction in array programming as \textcite{paszke2021getting} -- the array programming model is \textit{point-free}, because we reason on whole arrays and stylistically do not operate on individual indices. In contrast, \textit{pointful} (or \textit{index-oriented}) array programming allows us to reason about arrays as functions, where each element is defined in terms of its index. This pushes indexing operations to the forefront and, at the very least, brings us closer to \textbf{mathematical 
 notation} -- as per Iverson.
 
 \begin{figure}[h]
@@ -126,24 +131,26 @@ c = for i j. a.j.i * b.j
 \end{figure}
 
 
-\subsubsection{Einstein summation}
+\subsection{Einstein summation}
 
 The need for a better notation for multidimensional operations became evident. For inspiration, the Python community looked towards \textbf{Einstein summation} -- a notation used in physics for expressing linear algebra in an index-oriented fashion. Briefly, indices which are repeated are implicitly summed over, and all indices span over the full size of the indexed axis \cite{aahlander2002einstein}. A matrix product would be written as:
-$$ C_{i,j} = A_{i,k} B_{k,j} \iff C = AB $$
-Einstein notation was the main influence on the \texttt{numpy.einsum} function (a stringly-typed DSL), where the above is computed by \mintinline{python}{einsum("ij,jk->ik", a, b)}. The idea was expanded in Tensor Comprehensions \cite{vasilache2018tensor}, and more recently in \texttt{einops} \cite{rogozhnikov2021einops}, which primarily allows index-oriented shape manipulations, e.g.:
+$$ C_{i,k} = A_{i,j} B_{j,k} \iff C = AB $$
+Einstein notation was the main influence on \texttt{numpy.einsum} function, where the above is computed by \mintinline{python}{einsum("ij,jk->ik", a, b)}. The idea was expanded in Tensor Comprehensions \cite{vasilache2018tensor}, TACO, and more recently in \texttt{einops} \cite{rogozhnikov2021einops}, which primarily allows index-oriented shape manipulations, e.g.:
 \begin{center}
 \begin{cminted}{python}
 expand_dims(transpose(x, (0, 3, 1, 2)), 4) == einops.rearrange(x, "b h w c -> b c h w ()")
 \end{cminted}
 \end{center}
-Non-Python projects include Taco \cite{kjolstad2017tensor} and the Tullio macro in Julia.
+Non-Python projects with similar inspirations include Taco \cite{kjolstad2017tensor} and the Tullio macro in Julia.
 
 
-\subsubsection{Languages}
+\subsection{Languages}
 
-This section considers \textit{some} pointful array languages influential on the project. \textbf{Dex} is likely the best modern example. It features a value-dependent type system for keeping track of array sizes, and embraces the parallels between arrays and functions. The main shortcomings are the bespoke LLVM compiler and need for binding code for other frameworks, both of which introduce friction in practical use.
+We consider \textit{some} pointful array languages that had influence on this project. \textbf{Dex} is the most relevant example. It features a value-dependent type system for keeping track of array sizes, and embraces the parallels between arrays and functions. Its shortcomings are the bespoke LLVM compiler and need for binding code when used with other frameworks, both of which introduce friction in practical use. It was not used as a basis for this project, as I found its type system to be too impractical in the context of an embedded language.
 
-It is worth to mention the $\tilde{F}$ calculus introduced by \textcite{shaikhha2019efficient}. After extensions to the Phi calculus introduced in the proposal for this project, I discovered that it bears close resemblance, and as such has been an influence on further work. However, it does not have an open implementation, and its proposed compiler relies on C code generation. Lastly, the array comprehensions of Single-Assignment~C can be seen as a precursor feature of pointful array programming \cite{scholz1994single}. Pointful DSLs often feature comprehension-like constructs, which are prevalent in modern programming languages generally (e.g. Python and Haskell). 
+After the Phi calculus introduced in the project proposal was extended, it became closely similar to $\tilde F$, which was introduced by \textcite{shaikhha2019efficient}. However, $\tilde F$ does not have an open implementation, and its proposed compiler relies on C code generation, so this project takes an entirely different approach. 
+
+The array comprehensions of Single-Assignment~C can be seen as a precursor feature of pointful array programming \cite{scholz1994single}. Pointful DSLs often feature comprehension-like constructs, which are prevalent in modern programming languages generally (e.g. Python and Haskell). Lastly, the Tensor Algebra Compiler (TACO) also features various (limited) pointful features. However, its Python interface is subpar, it mostly focuses on sparse linear algebra, and lacks interoperability with existing solutions.
 
 % \subsection{Mapping to hardware}
 
@@ -157,40 +164,49 @@ It is worth to mention the $\tilde{F}$ calculus introduced by \textcite{shaikhha
 
 \section{Domain-specific languages}
 
-The practice of creating domain-specific languages (DSLs) has a long history \cite{hudak1996building}. General programming or even properties such as Turing-completeness or fallibility are not necessary in some contexts. Carefully designing what is possible in the language improves the programming experience and simplifies compilation. 
+The practice of creating domain-specific languages (DSLs) has a long history \cite{hudak1996building}. Features such as I/O, error handling, or even properties such as Turing-completeness are not always necessary. Carefully designing what is possible in the language improves the programming experience and simplifies compilation. 
 
 \subsection{Embeddings}
 
-A domain-specific language can be standalone, wherein it functions independently of the rest and uses its own syntax entirely. However, a refined approach is \textbf{embedding} them in a host language and taking advantage of the host's syntax. Furthermore, we distinguish two kinds of embeddings: \textit{deep} (where the DSL manipulates the host's syntax tree) and \textit{shallow} (the DSL is executed directly) \cite{gibbons2014folding}. 
-Generally, shallow-embedded languages are much easier to integrate with existing codebases and host language features. In particular, depending on the techniques used, DSL programs become values, and hence the host language programmer can apply metaprogramming techniques to transform them. 
-A special case of a deep-embedding is a \textit{stringly-typed} DSL, meaning that programs are expressed in (preferably short) strings which are parsed at runtime. A major example is the \texttt{einops} Python package.
+A domain-specific language can be standalone, wherein it functions as an independent language with limited capabilities. One could see the YAML serialisation language to be an example of such a DSL. However, a refined approach is \textbf{embedding} a DSL in a host language and taking advantage of the host's syntax. Furthermore, we distinguish two kinds of embeddings \cite{gibbons2014folding}. Firstly, we have \textit{deep} embeddings, where the DSL is executed by traversing the syntax tree of a program written in the host language. Otherwise the embedding is \textit{shallow}, in which case the semantics of the host syntax are preserved, and programs are executed directly.
+
+Generally, shallow-embedded languages are much easier to integrate with existing codebases and features of the host language. In particular, depending on the techniques used, DSL programs become values, and hence the host language programmer can apply metaprogramming techniques to transform them \cite{atkey2009unembedding}. 
+A special case of a deep-embedding is a \textit{stringly-typed} DSL, meaning that programs are expressed in (preferably short) strings which are parsed at runtime. An example in the scope of this work is the aforementioned \texttt{einops} Python library, but similarly one could see many regular expression interfaces as stringly-typed.
 
 \subsubsection{Tracing}
 
-In the context of Python, a common approach to creating shallow-embedded DSLs is \textbf{tracing}, which has found use in the novel Jax framework as described by \textcite{frostig2018compiling}. A DSL program is enclosed by a function in the host language, and to compile a program the function is \textit{traced} by calling it with placeholder (symbolic) arguments, representing the possible variable inputs. Computations are performed \textit{lazily} on these arguments -- no work is done immediately, and instead a computational graph is constructed. Once the function returns, this graph is captured and the program can be compiled and executed.
+In the context of Python, a common approach to creating shallow-embedded DSLs is \textbf{tracing}, which has found use in the novel Jax framework as described by \textcite{frostig2018compiling}. A DSL program is enclosed by a function in the host language, and to compile a program the function is \textit{traced} by calling it with placeholder (symbolic) arguments, representing the variable inputs. Computations are performed \textit{lazily} on these arguments -- no work is done immediately, and instead a computational graph is constructed. Once the function returns, this graph is captured and the represented program can be further compiled and executed.
+
 \begin{figure}[ht]
     \centering
     [Give an example of tracing here]
     \caption{Example of tracing in a Python DSL}
     \label{fig:tracing}
 \end{figure}
-This approach is predictable and leads to a kind of multi-stage programming, wherein before the results are determined, the entire program can first be collected and compiled. Tracing is often combined with techniques such as operator overloading, so that traced programs are written if they were \textit{eager}. A limitation of this approach is that runtime-dependent control flow cannot be traced directly.
+
+This approach leads to a kind of multi-stage programming, wherein before the results are determined, the entire program can first be collected and compiled. Tracing is often combined with techniques such as operator overloading, so that traced programs are written if they were \textit{eager}. A limitation of this approach is that runtime-dependent control flow cannot be traced directly.
 
 \section{Functional programming patterns}
 
 \subsection{Applicative functors}
 
-\textcite{mcbride2008applicative} introduced the notion of an \textbf{applicative functor} -- a functional programming pattern that generalises monads and specialises functors -- which is a well-behaved structure that defines certain primitive operations that behave well under composition. One of the central structures introduced in this work is an applicative, and so we introduce these operations here. We say $f$ is an applicative functor if the following operations are defined:
-\begin{itemize}
-    \item $\mathrm{return} : \alpha \to f\,\alpha$
-    \item $\circledast : f\,(\alpha \to \beta) \to f\,\alpha \to f\,\beta $
-\end{itemize}
-These operations must follow the \textit{applicative laws}, which can be seen in the light of homomorphisms in a categorical sense, or just a notion of niceness under function composition. In this work we use a bijectively constructed variation of $\circledast$ (pronounced \textit{apply}), called $\mathrm{lift}$:
+\textcite{mcbride2008applicative} introduced the notion of an \textbf{applicative functor} -- a functional programming pattern that generalises monads and specialises functors. It is a well-behaved structure that defines certain primitive operations that behave well under composition. This structure is a \textit{type constructor} $f$, which means that for any type $\alpha$ there is some type $f\,\alpha$.
+
+One of the central structures introduced in this work (the Axial) is shown to be an applicative, and so we introduce these operations here. We say a $f$ is an applicative functor if the following operations are defined:
+\begin{align*}
+\circledast &: f\,(\alpha \to \beta) \to f\,\alpha \to f\,\beta \\
+\mathrm{return} &: \alpha \to f\,\alpha
+\end{align*}
+These operations must follow the \textit{applicative laws}, the exact formulation of which is out of scope. However, they can be seen in the light of \textit{homomorphisms} in a categorical sense, or just a notion of niceness under function composition. In either case, the existence of such definitions proves they are in some way \textit{natural}. 
+
+In this work we use a slight variation of $\circledast$ (pronounced \textit{apply}), called $\mathrm{lift}$:
 \begin{align*}
 \mathrm{lift}_2& : (\alpha \to \beta \to \gamma) \to f\,\alpha \to f\,\beta \to f\,\gamma \\ 
 \mathrm{lift}_2&\,f\,a\,b = (f \circledast a) \circledast b
 \end{align*}
-One further generalises $\mathrm{lift}$ to arbitrary numbers of function arguments via an analogical construction. Applicatives can be seen as a sort of embellishment of values that allows application of similarly embellished transformations. Two examples of applicatives -- $\mathrm{List}$ and $\mathrm{ZipList}$ -- are shown on Figure \ref{fig:applicatives}.
+One further generalises $\mathrm{lift}$ to arbitrary numbers of function arguments via an analogical construction. It is worth noting that there exist a bijection between constructions of $\mathrm{lift}_2$ and $\circledast$.
+
+Applicatives can be seen as a sort of embellishment of values that allows application of similarly embellished transformations. Two examples of applicatives -- $\mathrm{List}$ and $\mathrm{ZipList}$ -- are shown on Figure \ref{fig:applicatives}.
 %
 \begin{figure}[h]
 \centering
@@ -210,11 +226,11 @@ One further generalises $\mathrm{lift}$ to arbitrary numbers of function argumen
   \end{align*}
   \caption{$\mathrm{ZipList}$ applicative on lists of fixed length $n$ \\ -- respective application}
 \end{subfigure}
-\caption{Examples of applicatives functors}
+\caption{Examples of applicative functors}
 \label{fig:applicatives}
 \end{figure}
 
-\textit{Representable} \textit{(Naperian)} functors are a stronger notion that generalises indexed collections -- these are also useful abstraction in array programming, as shown by \textcite{gibbons2016aplicative}. However, the structure we describe later on is a bit stronger yet, so we do not go into detail here.
+\textit{Representable} \textit{(Naperian)} functors are a stronger notion that generalises indexed collections -- these are also useful abstraction in array programming, as shown by \textcite{gibbons2016aplicative}. However, the structure we describe later on is a bit stronger yet, so we do not go into detail about those here.
 
 % \subsection{Monoids}
 
@@ -225,28 +241,83 @@ One further generalises $\mathrm{lift}$ to arbitrary numbers of function argumen
 
 \section{Compiler techniques}
 
-\subsection{Redundancy elimination}
+\subsection{Program representations}
 
-\subsubsection{Common subexpression elimination}
+A typical representation for calculi and functional languages (particularly in the ML family) is an \textbf{abstract syntax tree}. 
+Every node represents a single construct as a term in the program, and child nodes are its direct subterms. 
+Since the structure is a tree, every node has exactly one parent -- except the root, which represents the entire program. 
+In contrast, in a \textbf{term graph} there is no requirement that a node occurs as a child at most once. 
+Instead, the structure forms a directed acyclic graph, where common subexpressions may be represented as a single node. This is closely related to dataflow (computational) graphs, and repeated edges to a node correspond to data reuse.
 
-\subsubsection{Loop-invariant code motion}
+\begin{figure}[ht]
+\centering
+\begin{subfigure}{.4\textwidth}
+  \centering
+[Example abstract syntax tree here]
+  \caption{Abstract syntax tree}
+\end{subfigure}%
+\begin{subfigure}{.4\textwidth}
+  \centering
+[Example term graph here]
+  \caption{Term graph}
+\end{subfigure}
+\caption{Comparison of representations of \texttt{let x = a + b in x * x}}
+\label{fig:term-repr}
+\end{figure}
 
-\subsection{Equivalence classes}
+% dataflow computation
 
-The analysis used in this work can be seen as a special case of the term-equality judgement used in dependently-typed systems.
+\subsection{Optimisations}
 
-\subsection{Abstract interpretation}
+We briefly introduce typical compiler optimisations that are particularly important in this project.
 
-\section{Starting point}
+Firstly, we summarise \textbf{common subexpression elimination} (CSE): whenever a program contains multiple computations of a pure expression $e$, we may instead introduce a variable $x$ defined to be $e$ and replace all existing occurrences of $e$ with $x$. Simple solutions include considering sets of subterms for each subterm and dominator trees. In the scope of this work, we consider a special case of CSE -- transformation of a term graph into an abstract syntax tree by insertion of let-bindings.
+
+An extremely important optimisation for a calculus with array comprehensions is the avoidance of excessive nesting of loop computation where this is not necessary. When a subexpression does not depend on the state of the loop it is placed in, it may be computed before the loop starts. This is termed \textbf{loop-invariant code motion} and methods rely on simple tracking of liveness of loop state variables.
 
 \section{Requirements analysis}
 
-\section{Software engineering}
+As outlined in the Introduction and the Proposal, the project contains the following core deliverables:
+\begin{itemize}
+    \item \textbf{Formalisation} of a pointful array calculus, allowing reasoning what is expressible in the DSL.
+    \item \textbf{Front-end embedding} of the DSL in Python, producing programs in the introduced calculus.
+    \item \textbf{Execution back-end} for running aforementioned programs in an efficient manner, and making use of existing array frameworks to a high degree.
+\end{itemize}
+There were many possible variations on any of these points, so best judgements were made to fulfil the success criteria. A shallow embedding was chosen for the DSL, as it is an elegant approach that easily lends itself to metaprogramming in the host language. A major extension was the introduction of user-defined types in a way compatible with the DSL. The calculus was originally inspired by the very basis of \textcite{paszke2021getting}, with extensions largely influenced by \textcite{shaikhha2019efficient} and focusing on improvements to the expressiveness and safety of the language. Lastly, since the paradigm does not possess particularly complex runtime features, a basic interpreter does not pose a problem. However, the goal of execution with the largest Python array programming framework, NumPy, was set, so the scope of the calculus had to be adapted over time to the capability of the compilation technique. This was also meant to be generalisable to other array frameworks. No middle-end compiler phases were outset as a core deliverable, but they did form important extensions, including various compiler optimisations and program transformations.
 
 \subsection{Methodology}
 
+ Thanks to the modularity of the project and relatively orthogonal extensions, the \textit{spiral model} of development could be easily adopted. After the initial milestones for each of the core deliverables (calculus, front-end, back-end), further ones focused on extensions. Priority was assigned based on impact on success criteria and practical usage, as well as efficiency of further work. Risk assessment relied on the existence of implementations or descriptions of a feature. Debug tooling for inspecting intermediate outputs is useful for debugging (particularly for a compiler), and as such it was also given priority.
+
+\subsection{Review of array programs}
+
+Due to the variation among array programs and my limited exposure to them, a comprehensive review proved useful to determine the form of the language. This assessment was conducted on the Futhark benchmark suite, with most programs classified based on their use of various language features, such as parallel programming patterns (reduce, scan, scatter), and the generality to which they are applied. 
+
+In total, 29 cases were analysed, with the final language implementation being able to efficiently express most programs. Most of the benchmark suite constructed for the Evaluation was also based on these cases.
+
 \subsection{Choice of tools}
 
-\subsection{Review of test suites}
+Python was chosen as the main implementation language, as it is the host language for the DSL. This choice was made in the first place as it is the most relevant to the domain. Additionally, compilation targets usually only have Python interfaces. Due to this risk of complexity, the only other alternatives would necessitate a robust Python cross-language interface. 
 
-\subsection{Licensing}
+A notable example of such a language is Rust. However, attempts at an early prototype showed a trade-off due to its restrictive type system. Though it could have ensured performance and reliability in the long run, it sorely slowed down development, especially when coupled with my relative inexperience.
+
+Alternative implementation languages included C++ which lacks features that simplify implementations of a high-level compiler, though it is a primary choice for Python interfacing. Another possibility was OCaml, which is good for implementing compilers, but highly suboptimal for interfacing with Python.
+
+\subsection{Version control and testing}
+
+The main version control system (VCS) applied for the project was Git. The repository was actively backed up to GitHub and also periodically to other devices. All write-ups were either done locally in a Git repository synced to GitHub, or on-line in an Overleaf project which was also synced to GitHub. This was deemed sufficient to high reliability standards of the services applied, with a local device never holding the only copy of a core artefact. 
+
+Python's \texttt{pytest} testing framework was applied, which is a relatively standard choice that I was familiar with. Thanks to Python's nature it is highly dynamic, and features such as parameterised tests ensured consistency across all the compiler targets (backends) implemented throughout the course of the project. Code coverage could also be tested and achieved a reasonable score of 90\% (TODO: re-run).
+
+Most of the code was statically typed with Python's type annotation facilities, as verified by \texttt{mypy}. It was run in addition to a linter (\texttt{ruff}) and autoformatters (\texttt{black} with \texttt{isort} and \texttt{pyupgrade}). All of the tools were run via \textit{pre-commit hooks}, which ensured a clean state of the repository at all times.
+
+\subsection{Licenses}
+
+\textit{All software applied was open-source and permitted educational use: Python, NumPy, PyCharm, pytest, pre-commit hook stuff (mypy, black, ...), ...}
+
+\section{Starting point}
+
+Prior to starting the project, I had a solid amount of experience in Python and NumPy -- in particular through the \textit{Scientific Computing} course. I hadn't designed or implemented a programming language before, though I have implemented experimental shallow-embedded DSLs in Python. I had done a fair amount of reading of primary sources on array languages to establish the feasibility of the project. Knowledge from \textit{Semantics of Programming Languages} was useful throughout the course of the project.
+
+No implementation code was written prior to the start, though some elements were tested in experiments (esp. tracing and compilation schemes). Except for NumPy forming the main execution backend, no other major codebases were used as a basis for the project. 
+% \textit{Types}, \textit{Denotational Semantics}, and \textit{Optimising Compilers}
