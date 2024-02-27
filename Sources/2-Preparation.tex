@@ -164,7 +164,7 @@ The array comprehensions of Single-Assignment~C can be seen as a precursor featu
 
 \section{Domain-specific languages}
 
-The practice of creating domain-specific languages (DSLs) has a long history \cite{hudak1996building}. Features such as I/O, error handling, or even properties such as Turing-completeness are not always necessary. Carefully designing what is possible in the language improves the programming experience and simplifies compilation. 
+The practice of creating domain-specific languages (DSLs) has a long history \cite{hudak1996building}. They are motivated by the observation that I/O, error handling, or even properties such as Turing-completeness are not always necessary language features. Carefully designing what is possible in the language improves the programming experience and simplifies compilation.
 
 \subsection{Embeddings}
 
@@ -173,7 +173,7 @@ A domain-specific language can be standalone, wherein it functions as an indepen
 Generally, shallow-embedded languages are much easier to integrate with existing codebases and features of the host language. In particular, depending on the techniques used, DSL programs become values, and hence the host language programmer can apply metaprogramming techniques to transform them \cite{atkey2009unembedding}. 
 A special case of a deep-embedding is a \textit{stringly-typed} DSL, meaning that programs are expressed in (preferably short) strings which are parsed at runtime. An example in the scope of this work is the aforementioned \texttt{einops} Python library, but similarly one could see many regular expression interfaces as stringly-typed.
 
-\subsubsection{Tracing}
+\subsubsection{Tracing} \label{tracing}
 
 In the context of Python, a common approach to creating shallow-embedded DSLs is \textbf{tracing}, which has found use in the novel Jax framework as described by \textcite{frostig2018compiling}. A DSL program is enclosed by a function in the host language, and to compile a program the function is \textit{traced} by calling it with placeholder (symbolic) arguments, representing the variable inputs. Computations are performed \textit{lazily} on these arguments -- no work is done immediately, and instead a computational graph is constructed. Once the function returns, this graph is captured and the represented program can be further compiled and executed.
 
@@ -239,9 +239,13 @@ Applicatives can be seen as a sort of embellishment of values that allows applic
 % Monoids are an extremely important abstraction in parallel programming particularly thanks to the associativity property, thanks to which computation of \textit{reductions} can be efficiently parallelised via various work partitioning patterns. A simple divide-and-conquer halving pattern could be written as:
 % $$ \bigoplus_{i=1}^{2n} f(i) = \bigoplus_{i=1}^{n} f(i) \oplus \bigoplus_{i=n+1}^{2n} f(i) $$
 
-\section{Compiler techniques}
+\section{Compilers}
 
-\subsection{Program representations}
+Classically, a compiler consists of a lexer/parser (frontend), an assortment of analyses and tranformations (middle-end), and finally a code generator (backend), potentially with a runtime. 
+
+In the case of this project, the situation is different in various ways. The frontend of a shallow-embedded DSL does not need a parser, as programs are constructed via a programmatic interface instead (as given in \ref{tracing}). We discuss what program representations are convenient for this purpose (section \ref{representations}). Both the language and compilation target are also unusually high-level. This affects what optimisations are actually impactful, and so we consider these in section \ref{general-optimisations}.
+
+\subsection{Program representations} \label{representations}
 
 A typical representation for calculi and functional languages (particularly in the ML family) is an \textbf{abstract syntax tree}. 
 Every node represents a single construct as a term in the program, and child nodes are its direct subterms. 
@@ -267,7 +271,7 @@ Instead, the structure forms a directed acyclic graph, where common subexpressio
 
 % dataflow computation
 
-\subsection{Optimisations}
+\subsection{Optimisations} \label{general-optimisations}
 
 We briefly introduce typical compiler optimisations that are particularly important in this project.
 
@@ -291,9 +295,11 @@ There were many possible variations on any of these points, so best judgements w
 
 \subsection{Review of array programs}
 
-Due to the variation among array programs and my limited exposure to them, a comprehensive review proved useful to determine the form of the language. This assessment was conducted on the Futhark benchmark suite, with most programs classified based on their use of various language features, such as parallel programming patterns (reduce, scan, scatter), and the generality to which they are applied. 
+Array programs are extremely varied depending on the domain. A particular variation is in what language features are applied. For instance, deep learning programs rarely feature control flow, while differential equation solvers might perform stencil computations that iterate many times. Even though application in deep learning may have been the original motivation, developing a more general calculus was preferable.
 
-In total, 29 cases were analysed, with the final language implementation being able to efficiently express most programs. Most of the benchmark suite constructed for the Evaluation was also based on these cases.
+Due to my limited past exposure to the various array programming applications, I conducted a comprehensive review of array programs. This assessment was conducted on the Futhark benchmark suite, with most programs classified based on their use of various language features, such as parallel programming patterns (reduce, scan, scatter), and the generality to which they are applied. In total, 29 cases were analysed, with the final language implementation being able to efficiently express most programs. A majority of the benchmark suite constructed for the Evaluation was also based on these cases.
+
+An example conclusion was the inclusion of the sequential loop primitive (fold). It allows expressing many of the reviewed programs, which the original calculus could not. 
 
 \subsection{Choice of tools}
 
@@ -311,13 +317,13 @@ Python's \texttt{pytest} testing framework was applied, which is a relatively st
 
 Most of the code was statically typed with Python's type annotation facilities, as verified by \texttt{mypy}. It was run in addition to a linter (\texttt{ruff}) and autoformatters (\texttt{black} with \texttt{isort} and \texttt{pyupgrade}). All of the tools were run via \textit{pre-commit hooks}, which ensured a clean state of the repository at all times.
 
-\subsection{Licenses}
+\subsection{Licences}
 
 \textit{All software applied was open-source and permitted educational use: Python, NumPy, PyCharm, pytest, pre-commit hook stuff (mypy, black, ...), ...}
 
 \section{Starting point}
 
-Prior to starting the project, I had a solid amount of experience in Python and NumPy -- in particular through the \textit{Scientific Computing} course. I hadn't designed or implemented a programming language before, though I have implemented experimental shallow-embedded DSLs in Python. I had done a fair amount of reading of primary sources on array languages to establish the feasibility of the project. Knowledge from \textit{Semantics of Programming Languages} was useful throughout the course of the project.
+Prior to starting the project, I had a solid amount of experience in Python and NumPy -- in particular through the \textit{Scientific Computing} course. I hadn't designed or implemented a programming language before, though I have implemented experimental shallow-embedded DSLs in Python. I had done a fair amount of reading of primary sources on array languages to establish the feasibility of the project. Material learnt in \textit{Semantics of Programming Languages} and \textit{Compiler Construction} was useful throughout the course of the project.
 
 No implementation code was written prior to the start, though some elements were tested in experiments (esp. tracing and compilation schemes). Except for NumPy forming the main execution backend, no other major codebases were used as a basis for the project. 
 % \textit{Types}, \textit{Denotational Semantics}, and \textit{Optimising Compilers}

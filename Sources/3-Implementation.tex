@@ -11,9 +11,10 @@ We now describe the implementation of the project. We consider the main parts of
 %     \item Execution backends in NumPy and PyTorch
 % \end{itemize}
 
-\section{Phi -- pointful calculus}
+% \section{Phi -- pointful calculus}
+\section{Language -- Phi calculus}
 
-We begin by introducing the \textbf{Phi calculus}, which underlies the implemented shallow-embedded DSL. The $\Phi$ array comprehension is its key feature. It is the basis for our embedded pointful array language.
+We begin by introducing the \textbf{Phi calculus}, which underlies the implemented shallow-embedded DSL. The $\Phi$ array comprehension is its key feature. It is the basis for our embedded pointful array language. We outline the design choices made, and how they relate to the real capabilities of array libraries.
 
 \subsection{Grammar and design}
 
@@ -92,36 +93,42 @@ In terms of the semantics of Phi we consider these to be an implementation detai
 
 \paragraph{Invalid sizes} Where an array is defined with a negative size, or a fold was to perform a negative number of iterations, a runtime error is raised. 
 
-\section{Ein -- shallow-embedded language}
 
-\textbf{Ein} forms the programmer-accessible side of the project, and is implemented as the \texttt{ein} Python package.
+% \section{Ein -- shallow-embedded language}
+\section{Frontend -- Ein}
+
+\textbf{Ein} forms the programmer-accessible side of the project, and is implemented as the \texttt{ein} Python package. Unlike a traditional compiler, our frontend is not formed by a lexer or parser, but as a Python library functioning as a shallow-embedded DSL. Terms in our underlying language, the Phi calculus, are constructed by way of operations on the programmatic interface of Ein. This section is an overview of the features of Ein. We also describe the metaprogramming techniques used to implement language features such as array size inference and record types.
 
 \subsection{Design}
 
 One of the main influences on the design is Jax \cite{frostig2018compiling}, which lays out the pattern of encapsulating expression types and building programs up by tracing. This indirection can be seen as an instance of multi-stage programming, since the constructed expression can have whole-program optimisations applied to it. A useful feature is that let bindings in the language are implicit, and instead object identity is used to establish the same expression is reused, which can be seen as a safe approximation of \textit{hash consing}. For instance where \texttt{x} is an Ein value, \texttt{x + x} indicates the reuse of the value \texttt{x} added to itself, rather than performing the same computation twice.
 
-\subsection{Array type}
+\subsection{Types and values}
 
-Nearly all operations in Ein take place on \texttt{Array} objects, which incrementally construct expressions in the underlying calculus. For composability, Ein considers arrays to be define recursively as either \textbf{scalars} or \textbf{vectors} of (same-shape) arrays. This corresponds to the \texttt{Scalar} and \texttt{Vec} classes which form the actual implementation of the abstract \texttt{Array} class. We further split \texttt{Scalar} into \texttt{Int}, \texttt{Float} and \texttt{Bool}. All of these classes are usable as type annotations, so that \mintinline{python}{a: Vec[Vec[Float]]} indicates \texttt{a} is a matrix of floats.
+Nearly all operations in Ein take place on values of the \texttt{Array} type. These incrementally construct expressions in the underlying calculus via tracing. For composability, Ein considers arrays to be defined recursively as either \textbf{scalars} or \textbf{vectors} of arrays. This corresponds to the \texttt{Scalar} and \texttt{Vec} classes. These classes form the actual implementation of the abstract \texttt{Array} class, considered as a sum type.
 
-The methods of \texttt{Scalar} correspond to the scalar operators of Phi. These can be performed with operator overloading (as in \texttt{Scalar.\_\_mul\_\_} -- \texttt{a * b}) and member functions (\texttt{Scalar.sin} -- \texttt{a.sin()}). On the other hand, \texttt{Vec} mainly implements \texttt{Vec.\_\_getitem\_\_}, so that we can write \texttt{a[i]}. These are all exemplified below:
+The methods of \texttt{Scalar} correspond to the scalar operators of Phi. These can be performed with operator overloading (as in \texttt{Scalar.\_\_mul\_\_} -- \texttt{a * b}) and member functions (\texttt{Scalar.sin} -- \texttt{a.sin()}). On the other hand, \texttt{Vec} implements \texttt{Vec.\_\_getitem\_\_}, so that we can write \texttt{a[i]}. These are all exemplified below:
 \begin{center}
 \begin{cminted}{python}
-a: Vec[Float]
-b: Float = a[0].sin() * a[1].cos()
+a: Vec[Scalar]
+b: Scalar = a[0].sin() * a[1].cos()
 \end{cminted}
 \end{center}
 
+All of the classes used for representing Ein values are usable as type annotations. For this purpose, we further split \texttt{Scalar} into \texttt{Int}, \texttt{Float} and \texttt{Bool}, which correspond to base types $\sigma$ in Phi. The annotation \mintinline{python}{a: Vec[Vec[Float]]} indicates \texttt{a} is an Ein matrix of floats. Thanks to this design, it is possible to use standard type checkers like \texttt{mypy} for \textbf{gradual typing} of Python programs. Thanks to this some errors -- like attempting to add a scalar and a vector, or indexing into a scalar -- may be discovered before runtime. This is a significant advancement over NumPy and its derivatives, where this sort of static type checking is nearly impossible.
+
+Furthermore, during tracing Ein performs a form of basic type inference on the underlying Phi expressions. Any type errors found at that stage are reported at runtime, which ensures type safety of programs produced by the compiler. 
+
 \subsection{Combinators}
 
-The central part of Ein are the pointful, comprehension-style primitives: \texttt{array} and \texttt{fold}. Anonymous functions, defined with the \mintinline{python}{lambda} keyword, are applied to facilitate introduction of new variables -- for instance, the index in an array comprehension. As such, \mintinline{python}{array(lambda i: i, size=5)} describes the Phi expression $\phivec{i}{5}{i}$. Further, the summation in $\philet{a}{\phivec{i}{5}{i^2}}{ \sum_{i=0}^{4} a[i]}$ is expressed with a \texttt{fold}:
+The central part of Ein are the pointful, comprehension-style primitives: \texttt{array} and \texttt{fold}. Anonymous functions, defined with the \mintinline{python}{lambda} keyword, are applied to facilitate introduction of new variables -- for instance, the index in an array comprehension. Symbols for these variables are generated uniquely, and we compare them via Python object identity. As such, \mintinline{python}{array(lambda i: i, size=5)} describes the Phi expression $\phivec{i}{5}{i}$. Further, the summation in $\philet{a}{\phivec{i}{5}{i^2}}{ \sum_{i=0}^{4} a[i]}$ is expressed with a \texttt{fold}:
 \begin{center}
 \begin{cminted}{python}
 a = array(lambda i: i*i, size=5)
 s = fold(0, lambda i, acc: acc + a[i])
 \end{cminted}
 \end{center}
-We avoid explicit variable introductions by making use of the host language's lambda functions, in a manner similar to \textcite{atkey2009unembedding}. The explicit approach is taken surprisingly often for its drawbacks -- for instance in the SymPy algebra library or TACO. In the latter this amounts to having to write:
+We avoid explicit variable introductions by making use of the host language's lambda functions, in a manner similar to \textcite{atkey2009unembedding} and Jax. The explicit approach is taken surprisingly often for its drawbacks -- for instance in the SymPy algebra library or TACO. In the latter this amounts to having to write:
 \begin{center}
 \begin{cminted}{python}
 i, j = pytaco.get_index_vars(2)  # explicit introduction
@@ -130,7 +137,9 @@ S[i, j] = A[i, j] + A[j, i]      # i, j still live afterwards. danger!
 \end{center}
 This is evidently flawed, as there is nothing guarding against the reuse of variables in the wrong scope. 
 
-It is worth noting that these combinators conceptually introduce nested code blocks. This information is missing in traced expressions, and we recover blocks via loop-invariant code motion in the middle-end.
+It is worth noting that Ein's combinators introduce nested code blocks. This information is missing in traced expressions. Instead, we recover blocks via loop-invariant code motion in the middle-end.
+
+Ein's combinators represent a step up in the expressive power of the array programming model. We previously noted NumPy is a first-order interface, in that its operations cannot be parameterised by functions. On the other hand, \texttt{array} and \texttt{fold} are second-order, similarly to Futhark's Second-Order Array Combinators. These are still beneficial despite no complete language support for higher-order functions.
 
 \subsection{Size inference}
 
@@ -146,13 +155,15 @@ Say that the vectors $\texttt{a}$ and $\texttt{b}$ have the same size. Then with
 array(lambda i: a[i] + b[i])
 \end{cminted} 
 \end{center}
-Specifically, for any index \texttt{i} that does not have an explicit \texttt{size} defined, it is inferred by taking the size of any array \texttt{a} that is indexed directly with \texttt{i} (i.e. in an expression \texttt{a[i]}), which we find by term graph traversal. Where there are other such candidates \texttt{b}, we add a program assertion that \texttt{a} and \texttt{b} have the same size.
+Specifically, for any index \texttt{i} that does not have an explicit \texttt{size} defined, it is inferred by taking the size of any array \texttt{a} that is indexed directly with \texttt{i} (i.e. in an expression \texttt{a[i]}), which we find by term graph traversal. Where there are other such candidates \texttt{b}, we add a program assertion that \texttt{a} and \texttt{b} have the same size. We further generalise this to the \texttt{fold} combinator. Its loop counter is often used to iterate over arrays.
 
-There are many mechanisms similar to size inference, for instance in Single-Assignment C and in a more structured way in Dex via its value-dependent type inference. In DSLs taking direct inspiration from Einstein summation, such approaches are often the only way of specifying array sizes. Ein also provides the flexibility of providing an explicit array size.
+This is not as obvious to implement correctly as it seems at first sight. Any sizes cannot depend on a comprehension index (due to the Phi typing rules) nor on a value from an inner scope. Various checks and simplifications are performed to avoid bad candidates for an inferred array size.
+
+There are many mechanisms similar to size inference, for instance in Single-Assignment C and in a more structured way in Dex via its value-dependent type inference. In DSLs taking direct inspiration from Einstein summation, such approaches are often the only way of specifying array sizes. Ein also provides the flexibility of providing an explicit array size, as shown in the former example.
 
 \subsection{Records}
 
-One might notice the lack of inclusion of pairs in the \texttt{Array} type. In fact, pair types of Phi are sufficient to represent (labelled) record types. We use a basic encoding where the type $\{ x: \phiinttype, y: \phiinttype, z: \phiinttype \}$ is represented as $\phipairtype{\phiinttype}{\left( \phiinttype \times \phiinttype \right)}$. In Ein for convenience we allow direct use of Python types to represent this. One can write:
+One might notice the lack of inclusion of pairs in the \texttt{Array} type. These are modelled separately. In fact, pair types of Phi are sufficient to represent (labelled) record types. We use a basic encoding where the type $\{ x: \phiinttype, y: \phiinttype, z: \phiinttype \}$ is represented as $\phipairtype{\phiinttype}{\left( \phiinttype \times \phiinttype \right)}$. In Ein for convenience we allow directly use standard Python types to represent this. One can write:
 \begin{center} 
 \begin{cminted}{python}
 a = array(lambda i: {"x": i, "y": i*i, "z": i*i*i}, size=10)
@@ -179,67 +190,125 @@ a = array(lambda i: Dual(i, 1), size=5)  # constructs Vec[Dual]
 b = array(lambda i: a[i] * a[i])  # calls Dual.__mul__
 \end{cminted}
 \end{center}
-In contrast, traditional libraries in the array programming model struggle to achieve this sort of composability -- since we consider whole arrays at a time, at best we could define a series of types (vectors, matrices, etc.) of dual numbers. In a pointful paradigm, where we focus on individual elements, we can define custom scalar datatypes and consider arrays of them.
+In contrast, traditional libraries in the array programming model struggle to achieve this sort of composability. Since they consider whole arrays at a time, at best one could define a series of types (vectors, matrices,~...) for dual numbers. In a pointful paradigm, where we focus on individual elements, we can define custom scalar datatypes and consider arrays of them. Futhark possesses similarly powerful ML-style record types.
+
 What is more, efficient runtime representation of these structures is ensured via various program transformations. Record types in Ein are a \textbf{zero-cost abstraction}. We return to this claim in the Evaluation.
 
 \section{Analyses}
+
+We now describe the main analyses applied on Phi calculus, which facilitate further transformations and efficient code generation. Since Ein produces Phi term graphs through the tracing process, this is the main form on which we perform our analyses and transformations.
 
 \subsection{Size equivalences}
 
 \textit{Using equality assertions to create an equivalence judgement between sizes. Used for determining safety to elide some indexing operations and that operations do not explode memory usage.}
 \todothis
 
-\subsection{Specialised folds}
+\subsection{Specialisations}
 
 \textit{Declarative syntax matching on summation, minimisation, etc. defined by folds, which allows us to infer what high-level operations are applied (e.g. reductions).} \todothis
 
+\paragraph{Folds}
+
+\paragraph{Clipped translations}
+
+\subsection{Tensor contractions} 
+
 \section{Transformations}
-
-\subsection{Array-of-structs to struct-of-arrays}
-
-A standard transformation in array programming is the array of structs (AoS) to struct of arrays (SoA) representation transformation. Using it, the Ein compiler reduces all arrays to simple arrays of primitive types, as array libraries lack support for e.g. arrays of pairs. This is the same approach as Futhark and $\tilde F$. \todothis
 
 \subsection{Outlining}
 
-\textit{Common subexpression elimination and loop-invariant code motion via insertion of let bindings.} \todothis
+The term graph form produced by Ein is particularly useful when performing analyses, as not as much information has to be carried through in contexts. However, it is not an intermediate representation apt for generating executable code. It lacks information on where values used multiple times should be stored and when should they be computed. To address this, we want to convert our \textbf{term graph} into an \textbf{abstract syntax tree}. We refer to this process as \textit{outlining}. The goal is inserting appropriate let bindings in a semantic-preserving fashion, while preventing recomputation of expressions many times. Notably, \textit{inlining} (which is also used) corresponds to removal of the let bindings inserted by outlining. We perform it simply by directly substituting all bindings, returning the AST to the term graph form.
 
-\subsection{Peephole optimisations}
+The two main techniques applied are \textbf{common subexpression elimination} and \textbf{loop-invariant code motion}. The former addresses avoiding computations like $e + e$ (for a \textit{non-atomic} expression $e$), which is replaced by $\philet{x}{e}{x + x}$. Meanwhile, the latter ensures that terms constant across loop iterations are computed outside the loop. For instance, we want to perform the following:
+$$ 
+\phivec{i}{n}{a[i] + \left( \phivec{j}{n}{2 \cdot b[j]} \right)[i]} \quad\leadsto\quad \philet{c}{\phivec{i}{n}{2 \cdot b[i]}}{\phivec{i}{n}{a[i] + c[i]}} 
+$$
+We consider both of these transformations to be a special cases of let insertion. As such, the implementation focuses on determining the expressions which should be let-bound. In addition, we need to determine the program point at which the binding should be performed. For simplicity, we associate program points with nodes in the term graph -- which are just terms. We have reduced the problem to determining for each term $t$, a list of terms $t'$ so that we transform $t \leadsto \philet{x}{t'}{[x/t']t}$. The substitution of a variable $x$ for $t'$ is performed by syntactic equivalence.
 
-\subsection{Eliminating temporaries}
+An important simplification of the problem setup is that Phi calculus is entirely pure (there are no side effects). Any let insertions performed in this manner of ``reverse-substitution'' preserve program semantics.
 
-\subsection{Indexing}
+\paragraph{Common subexpression elimination} We perform CSE via the standard method on term graphs, which is the application of \textbf{dominators}. In brief, consider a graph in which there is an edge $t \to t'$ whenever $t'$ is a direct subterm of $t$. Then consider the immediate dominator  $t^*$ of a term $t$. By definition, we learn that $t^*$ is the smallest term that contains all instances of $t$ as a subterm. In fact, this indicates that we should let-bind $t$ at $t^*$. We perform this let-insertion for every non-atomic term $t$ for which $\mathrm{indeg}\,t > 1$. This common subexpression elimination produces an abstract syntax tree given any term graph.
 
-\subsubsection{Direct indexing}
+We compute the immediate dominators with the \texttt{networkx} package, which is done in $O(n^2)$ worst-case time. An implementation for directed acyclic graphs could be optimised to $O(n \log n)$.
 
-\subsubsection{Clipped translation}
+\paragraph{Loop-invariant code motion} We tackle the problem of recomputing values invariant across loop iterations. We want to compute these prior to the loop. We consider \textit{loop terms} to be $\Phi$ and $\mathrm{fold}$. 
 
-\subsection{Tensor contractions}
+Since after CSE we have an AST, we can perform a tree traversal on it. For each term $t$, there exist a stack of loop terms that it is a subterm of, and we can keep update it as part of the traversal. Each of these loop terms $s_\ell$ (and any let-bindings in between) introduces a set of symbols $S_\ell$, so the stack induces a sequence $(S_1, S_2, \dots, S_k)$. Denote the free symbols in $t$ as $T$. We make the following observation about scopes: if $\left( S_\ell \cup \cdots \cup S_k \right) \cap T = \emptyset$, then it is safe to let-bind $t$ prior to the loop $s_\ell$. On the other hand, $t$ will be computed the fewest times if it is moved to the outermost loop. Hence, we pick the minimum $\ell$ that satisfies the lexical scope condition. We find and insert this let-binding for all non-atomic terms $t$.
 
-\section{Array calculus}
+A particularly tricky part of the implementation is the ordering in which these insertions are performed. An attentive reader may notice that the wrong order of insertions will results in scope errors or infinite terms. However, a careful implementation avoids these issues.
 
-\subsection{Expressions}
+\subsection{Array-of-structs to struct-of-arrays}
 
-\section{Compiler -- Escaping the Pointless}
+A standard transformation in array programming is the array of structs (AoS) to struct of arrays (SoA) representation transformation. Using it, the Ein compiler reduces all arrays to simple arrays of primitive types, as our compilation target -- NumPy,\footnote{Technically, NumPy does allow defining custom \texttt{dtype}s, but this feature is limited in use and intended for (de)serialising binary data. Corresponding features are not available in deep learning frameworks, so relying on this is undesirable.} and array libraries generally -- lack support for arrays of composite types like pairs. Furthermore, recall the definition of types in Phi. Once we eliminate arrays of pairs, the only types $\tau'$ are given by:
+\begin{align*}
+\alpha &::= \sigma \mid \Box \alpha \\
+\tau' &::= \alpha \mid \tau' \times \tau'
+\end{align*}
+Hence, $\tau'$ can only be tuples of multidimensional arrays. This vastly simplifies compilation. 
+
+The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \Box \tau_1 \times \Box \tau_2$, i.e. for each array of pairs there exist an equivalent pair of arrays (with all arrays the same size). As such, we need only consider the introduction and elimination forms of arrays of pairs -- comprehensions and indexing. This is shown in Figure \ref{fig:aos-to-soa}, and we apply the transformation directly on the term graph. AoS-to-SoA transformations are also applied in Futhark and $\tilde F$. However, it is not described in detail for $\tilde F$ in the relevant paper.
+
+\newcommand{\phisoa}[1]{\mathcal S \left\llbracket {#1} \right\rrbracket}
+
+\begin{figure}[h]
+    \centering
+    \begin{align*}
+\phisoa {\phivec{i}{e_n}{e}}
+&= \phipair{\phivec{i'}{\phisoa{e_n}}{\phifst{\phisoa{e}}}}{\phivec{i''}{\phisoa{e_n}}{\phisnd{\phisoa{e}}}}
+&\text{(where }\Gamma; \Delta, i \vdash e : \phipairtype{\tau_1}{\tau_2} \text{)} \\[0.5em]
+\mathcal P \left\llbracket e, e' \right\rrbracket
+&= \phipair{(\phifst{e})[e']}{(\phisnd{e})[e']}
+&\text{(where }\Gamma; \Delta \vdash e : \phipairtype{\tau_1}{\tau_2} \text{)} \\
+\mathcal P \left\llbracket e, e' \right\rrbracket
+&= e\left[ e' \right]
+&\text{(where }\Gamma; \Delta \vdash e : \phivectype{\tau} \text{)} \\
+\mathcal S \left\llbracket e[e'] \right\rrbracket
+&= \mathcal P \left\llbracket \phisoa{e}, \phisoa{e'} \right \rrbracket
+&\text{(where }\Gamma; \Delta \vdash e : \phivectype{\tau} \text{)} \\[0.5em]
+\phisoa{e + e'}
+&= \phisoa{e} + \phisoa{e'}
+&\text{(and similarly for other cases)} \\[0.5em]
+\phisoa{\phivectype{(\phipairtype{\tau_1}{\tau_2}})} &= \phipairtype{\phivectype{\tau_1}}{\phivectype{\tau_2}} &\text{(identity otherwise)}
+    \end{align*}
+    \caption{AoS-to-SoA transformation on Phi, written $\mathcal S$. $\mathcal P$ maps an indexing to all arrays in the tuple. Environments $\Gamma; \Delta$ are passed through implicitly.}
+    \label{fig:aos-to-soa}
+\end{figure}
+
+\section{Code generation -- Escaping the Pointless}
 
 \subsection{Array calculus}
 
-We first formalise our compilation target, since so far it has only been vaguely described as the API of the NumPy library.
+\textit{We first formalise our compilation target for Phi, since so far it has only been vaguely described as the API of the NumPy library.} \todothis
 
 \subsection{Axials}
 
 $$ \mathrm{VarEnv} \times \mathrm{IndexEnv} \to \mathrm{Value} \,\simeq\, \mathrm{VarEnv} \to \mathrm{NDArray}\, \mathrm{Value} $$
 
-\subsection{Compilation contract}
+\todothis
 
-\section{Execution backends}
+% Compilation contract
+
+\subsection{Optimisations}
+
+\todothis
+
+\paragraph{Peephole optimisations}
+
+\paragraph{Eliminating temporaries}
+
+\section{Runtime -- Execution backends}
 
 \subsection{Naive}
 
+\todothis 
+
 \subsection{NumPy}
+
+\todothis 
 
 \subsection{Generalising the NumPy backend}
 
-The very same methods as in the NumPy can be used in other array programming frameworks. This is because they, in many respects, derive from NumPy. Such a situation applies to the most popular libraries -- PyTorch, TensorFlow, Jax.
+\textit{The very same methods as in the NumPy can be used in other array programming frameworks. This is because they, in many respects, derive from NumPy. Such a situation applies to the most popular libraries -- PyTorch, TensorFlow, Jax.} \todothis
 
 \subsubsection{Challenges}
 
@@ -248,3 +317,5 @@ The very same methods as in the NumPy can be used in other array programming fra
 \section{Repository overview}
 
 The repository follows a usual Python project structure, with the root directory containing the \texttt{ein/} source directory, \texttt{tests/}, \texttt{tools/}, the \texttt{pyproject.toml} project configuration, a \texttt{README.md}, and Git repository files. The main source directory is split into three subpackages that correspond to each part of the compiler -- \texttt{frontend}, \texttt{midend}, and \texttt{backend}. The root package implements modules common to all of these, particularly the definition of the Phi calculus and various facilities surrounding it. The tests are split by the features they mainly apply, with the \texttt{suite/} subdirectory implementing larger example programs that were used for benchmarking. These benchmarks are run with \texttt{tools/benchmark.py}, which contains preconfigured benchmark runs for the suite, collecting and visualising the data.
+
+% TODO/TOUSE: Where possible, defensive programming was applied to prevent compiler transformations returning code that invalidates expected properties. Most of the code is statically typed with annotations, and it was regularly checked with mypy.
