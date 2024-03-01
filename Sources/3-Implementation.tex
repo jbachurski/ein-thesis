@@ -163,7 +163,7 @@ There are many mechanisms similar to size inference, for instance in Single-Assi
 
 \subsection{Records}
 
-One might notice the lack of inclusion of pairs in the \texttt{Array} type. These are modelled separately. In fact, pair types of Phi are sufficient to represent (labelled) record types. We use a basic encoding where the type $\{ x: \phiinttype, y: \phiinttype, z: \phiinttype \}$ is represented as $\phipairtype{\phiinttype}{\left( \phiinttype \times \phiinttype \right)}$. In Ein for convenience we allow directly use standard Python types to represent this. One can write:
+One might notice the lack of inclusion of pairs in the \texttt{Array} type. These are modelled separately. In fact, pair types of Phi are sufficient to represent (labelled) record types. We use a basic list-like encoding where the type $\{ x: \phiinttype, y: \phiinttype, z: \phiinttype \}$ is represented as $\phipairtype{\phiinttype}{\left( \phiinttype \times \phiinttype \right)}$. For convenience, we directly use standard Python types to represent Ein record values. We can write:
 \begin{center} 
 \begin{cminted}{python}
 a = array(lambda i: {"x": i, "y": i*i, "z": i*i*i}, size=10)
@@ -173,7 +173,7 @@ assert a[4]["y"].eval() == 16
 \end{center}
 In fact, arbitrary \textit{layouts} consisting of Python tuples, dictionaries, and dataclasses can be used as array elements -- and these are reconstructed when indexing into these arrays. This feature relies on the layouts being \textit{static}. The only dynamically-sized values are arrays, which are handled through the \texttt{Vec} class. 
 
-This feature enables a new style of array programming that was previously impossible in Python. It is possible to describe composable array structures of custom data types and define operations on them. For instance, one could define an array of dual numbers\footnote{Dual numbers are similar to complex numbers, but instead of the imaginary unit $i^2 = -1$ we instead have a symbol $\varepsilon^2 = 0$. They are particularly useful in forward-mode automatic differentiation, and one could use them for this purpose in Ein.} with arrays of dataclasses:
+This feature enables a new style of array programming, unavailable in existing libraries. It is possible to describe composable array structures of custom data types and define operations on them. For instance, one could define an array of dual numbers\footnote{Dual numbers are similar to complex numbers, but instead of the imaginary unit $i^2 = -1$ we instead have a symbol $\varepsilon^2 = 0$. They are particularly useful in forward-mode automatic differentiation, and one could use them for this purpose in Ein.} with arrays of dataclasses:
 \begin{center}
 \begin{cminted}{python}
 @dataclass
@@ -211,7 +211,7 @@ We now describe the main analyses applied on Phi calculus, which facilitate furt
 
 \paragraph{Clipped translations}
 
-\subsection{Tensor contractions} 
+\paragraph{Tensor contractions} 
 
 \section{Transformations}
 
@@ -225,17 +225,19 @@ $$
 $$
 We consider both of these transformations to be a special cases of let insertion. As such, the implementation focuses on determining the expressions which should be let-bound. In addition, we need to determine the program point at which the binding should be performed. For simplicity, we associate program points with nodes in the term graph -- which are just terms. We have reduced the problem to determining for each term $t$, a list of terms $t'$ so that we transform $t \leadsto \philet{x}{t'}{[x/t']t}$. The substitution of a variable $x$ for $t'$ is performed by syntactic equivalence.
 
-An important simplification of the problem setup is that Phi calculus is entirely pure (there are no side effects). Any let insertions performed in this manner of ``reverse-substitution'' preserve program semantics.
+An important simplification of the problem setup is that Phi calculus is entirely pure (there are no side effects). Any let insertions performed in this manner of ``reverse-substitution'' preserve program semantics. Additionally, we make use of the assumption that all subexpressions are evaluated at least once. Recall that conditionals in Phi evaluate both conditional branches, and the premise is reasonable for loop constructs.
 
-\paragraph{Common subexpression elimination} We perform CSE via the standard method on term graphs, which is the application of \textbf{dominators}. In brief, consider a graph in which there is an edge $t \to t'$ whenever $t'$ is a direct subterm of $t$. Then consider the immediate dominator  $t^*$ of a term $t$. By definition, we learn that $t^*$ is the smallest term that contains all instances of $t$ as a subterm. In fact, this indicates that we should let-bind $t$ at $t^*$. We perform this let-insertion for every non-atomic term $t$ for which $\mathrm{indeg}\,t > 1$. This common subexpression elimination produces an abstract syntax tree given any term graph.
+\paragraph{Common subexpression elimination} We perform CSE via a standard method on term graphs, which is by application of \textbf{dominators}. Consider a graph in which there is an edge $t \to t'$ whenever $t'$ is a direct subterm of $t$. Then consider the immediate dominator $t^*$ of a term $t$. By definition, we learn that $t^*$ is the smallest term that contains all instances of $t$ as a subterm. In fact, this indicates that we should let-bind $t$ at $t^*$. We perform this let-insertion for every non-atomic term $t$ for which $\mathrm{indeg}\,t > 1$. This common subexpression elimination produces an abstract syntax tree given any term graph.
 
 We compute the immediate dominators with the \texttt{networkx} package, which is done in $O(n^2)$ worst-case time. An implementation for directed acyclic graphs could be optimised to $O(n \log n)$.
 
 \paragraph{Loop-invariant code motion} We tackle the problem of recomputing values invariant across loop iterations. We want to compute these prior to the loop. We consider \textit{loop terms} to be $\Phi$ and $\mathrm{fold}$. 
 
-Since after CSE we have an AST, we can perform a tree traversal on it. For each term $t$, there exist a stack of loop terms that it is a subterm of, and we can keep update it as part of the traversal. Each of these loop terms $s_\ell$ (and any let-bindings in between) introduces a set of symbols $S_\ell$, so the stack induces a sequence $(S_1, S_2, \dots, S_k)$. Denote the free symbols in $t$ as $T$. We make the following observation about scopes: if $\left( S_\ell \cup \cdots \cup S_k \right) \cap T = \emptyset$, then it is safe to let-bind $t$ prior to the loop $s_\ell$. On the other hand, $t$ will be computed the fewest times if it is moved to the outermost loop. Hence, we pick the minimum $\ell$ that satisfies the lexical scope condition. We find and insert this let-binding for all non-atomic terms $t$.
+Since after CSE we have an AST, we can perform a tree traversal on it. For each term $t$, there exist a stack of loop terms that it is a subterm of, and we can keep update it as part of the traversal. Each of these loop terms $s_\ell$ (and any let-bindings inside) introduces a set of symbols $S_\ell$, so the stack induces a sequence $(S_1, S_2, \dots, S_k)$. Denote the free symbols in $t$ as $T$. We make the following observation about scopes: if $\left( S_\ell \cup \cdots \cup S_k \right) \cap T = \emptyset$, then it is safe to let-bind $t$ prior to the loop $s_\ell$. On the other hand, $t$ will be computed the fewest times if it is moved to the outermost loop. Hence, we pick the minimum $\ell$ that preserves lexical scopes. We find and insert this let-binding for all non-atomic terms $t$.
 
-A particularly tricky part of the implementation is the ordering in which these insertions are performed. An attentive reader may notice that the wrong order of insertions will results in scope errors or infinite terms. However, a careful implementation avoids these issues.
+A particularly tricky part of the implementation is the ordering in which these insertions are performed. An attentive reader may notice that the wrong choices result in scope errors or infinite terms. However, a careful implementation avoids these issues. 
+
+Lastly, there are cases in which bindings may become trivial, i.e. of the form $\philet{x}{y}{e}$. To erase these, we perform a basic form of \textbf{copy propagation} by inlining (substituting) all trivial bindings.
 
 \subsection{Array-of-structs to struct-of-arrays}
 
@@ -249,6 +251,7 @@ Hence, $\tau'$ can only be tuples of multidimensional arrays. This vastly simpli
 The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \Box \tau_1 \times \Box \tau_2$, i.e. for each array of pairs there exist an equivalent pair of arrays (with all arrays the same size). As such, we need only consider the introduction and elimination forms of arrays of pairs -- comprehensions and indexing. This is shown in Figure \ref{fig:aos-to-soa}, and we apply the transformation directly on the term graph. AoS-to-SoA transformations are also applied in Futhark and $\tilde F$. However, it is not described in detail for $\tilde F$ in the relevant paper.
 
 \newcommand{\phisoa}[1]{\mathcal S \left\llbracket {#1} \right\rrbracket}
+\newcommand{\phitupleindex}[2]{\mathcal P \left\llbracket {#1}, {#2} \right\rrbracket}
 
 \begin{figure}[h]
     \centering
@@ -256,21 +259,21 @@ The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \B
 \phisoa {\phivec{i}{e_n}{e}}
 &= \phipair{\phivec{i'}{\phisoa{e_n}}{\phifst{\phisoa{e}}}}{\phivec{i''}{\phisoa{e_n}}{\phisnd{\phisoa{e}}}}
 &\text{(where }\Gamma; \Delta, i \vdash e : \phipairtype{\tau_1}{\tau_2} \text{)} \\[0.5em]
-\mathcal P \left\llbracket e, e' \right\rrbracket
-&= \phipair{(\phifst{e})[e']}{(\phisnd{e})[e']}
+\phitupleindex{e}{e'}
+&= \phipair{\phitupleindex{\phifst{e}}{e'}}{\phitupleindex{\phisnd{e}}{e'}}
 &\text{(where }\Gamma; \Delta \vdash e : \phipairtype{\tau_1}{\tau_2} \text{)} \\
-\mathcal P \left\llbracket e, e' \right\rrbracket
+\phitupleindex{e}{e'}
 &= e\left[ e' \right]
 &\text{(where }\Gamma; \Delta \vdash e : \phivectype{\tau} \text{)} \\
-\mathcal S \left\llbracket e[e'] \right\rrbracket
-&= \mathcal P \left\llbracket \phisoa{e}, \phisoa{e'} \right \rrbracket
+\phisoa{e[e']}
+&= \phitupleindex{\phisoa{e}}{\phisoa{e'}}
 &\text{(where }\Gamma; \Delta \vdash e : \phivectype{\tau} \text{)} \\[0.5em]
 \phisoa{e + e'}
 &= \phisoa{e} + \phisoa{e'}
 &\text{(and similarly for other cases)} \\[0.5em]
 \phisoa{\phivectype{(\phipairtype{\tau_1}{\tau_2}})} &= \phipairtype{\phivectype{\tau_1}}{\phivectype{\tau_2}} &\text{(identity otherwise)}
     \end{align*}
-    \caption{AoS-to-SoA transformation on Phi, written $\mathcal S$. $\mathcal P$ maps an indexing to all arrays in the tuple. Environments $\Gamma; \Delta$ are passed through implicitly.}
+    \caption{AoS-to-SoA transformation on Phi, written $\mathcal S$. $\mathcal P$ maps an indexing to all arrays in the tuple. Environments $\Gamma; \Delta$ are passed through implicitly, in accordance with typing rules.}
     \label{fig:aos-to-soa}
 \end{figure}
 
@@ -282,6 +285,8 @@ The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \B
 
 \subsection{Axials}
 
+\textit{\textbf{Axials} are the key research contribution of this work.}
+
 $$ \mathrm{VarEnv} \times \mathrm{IndexEnv} \to \mathrm{Value} \,\simeq\, \mathrm{VarEnv} \to \mathrm{NDArray}\, \mathrm{Value} $$
 
 \todothis
@@ -292,27 +297,66 @@ $$ \mathrm{VarEnv} \times \mathrm{IndexEnv} \to \mathrm{Value} \,\simeq\, \mathr
 
 \todothis
 
-\paragraph{Peephole optimisations}
-
-\paragraph{Eliminating temporaries}
-
 \section{Runtime -- Execution backends}
+
+The compilation target of Ein is a high-level library in the array programming model. This means that most of the work is spent in relatively expensive whole-array operations, which dominates many overheads associated with an interpreter written in Python. As such, we can take liberties to simplify the implementation. The primary technique we use to form an execution backend is \textit{staging}. In essence, we implement a function of the form
+$$ \mathrm{Expr} \to \left( \mathrm{Env} \to \mathrm{Value} \right) $$
+where $\mathrm{Expr}$ is an expression in Phi or array calculus, and $\mathrm{Env}$ is a mapping from variables to assigned values. This essentially corresponds to directly implementing the denotational semantics $\llbracket - \rrbracket : \mathrm{Env} \to \mathrm{Value}$ of the two calculi, where we implement the denotations as Python closures.
 
 \subsection{Naive}
 
-\todothis 
+The first execution backend implemented was the \textit{naive Python interpreter}. It directly implements the denotational semantics of Phi, so Axial compilation is not necessary. We use Python's builtin types to represent Phi values. Thanks to the dynamically typed nature of these types, we representing arrays of pairs does not necessitate the AoS-to-SoA transformation. However, we still have to apply common subexpression elimination and loop-invariant code motion to avoid combinatorial explosion of the time complexity.
+
+This backend was primarily used as a reference as time went on, as extending it was easiest. It focused on correctness rather than any notion of performance, and it is order of magnitudes slower than the array library backends. To give an example of the naive backend's behaviour, staging $\phivec{i}{n}{2 \cdot i}$ results in a Python function \mintinline{python}{(dict[Variable, Value]) -> Value} semantically equal to
+\begin{center}
+\begin{cminted}{python}
+lambda env: [2 * i for i in range(env[n])]
+\end{cminted}    
+\end{center}
 
 \subsection{NumPy}
 
-\todothis 
+We follow the same denotation-guided staging approach as in the naive backend. This time around we apply the whole suite of transformations and use Axial compilation from Phi to the array calculus. The key difference is a stricter value representation that must rely on NumPy's \texttt{ndarray}s. We set all values to be either arrays, or a tuple of arrays. On this basis, we also apply some NumPy-specific performance optimisations.
+
+\paragraph{Bindings} In some cases, NumPy attempts not to copy values where possible, and rather modifies their stride representation. For instance, a matrix might be transposed with \texttt{numpy.transpose(a, (1, 0))}. However, NumPy merely marks the memory layout as transposed -- it returns a \textit{view} -- rather than returning a transposed copy of the data. This is beneficial when the value is used just once, but harmful when it is reused. We make use of a heuristic approach to ensure let-bound values have a cache-efficient memory layout. Whenever a view would be bound to a variable, it is immediately copied to the target layout instead. 
+
+It is worth noting here that Ein's let-bindings allow more efficient memory management than a manually-written NumPy program. Usually, new arrays are allocated sequentially with no explicit deallocations. Memory can only be freed by the garbage collector at the end of a function's execution. With let bindings, we achieve higher granularity -- arrays can be freed as soon as they are no longer used.
+
+\paragraph{Eliminating temporaries} Where they cannot return a view, NumPy operations allocate fresh memory for the result by default. Operations can be made in-place instead, but idiomatic NumPy programs are difficult to write in this style. 
+This state of matters is suboptimal. Where we want to add three vectors \texttt{(a, b, c)}, the computation \texttt{a + b + c} will allocate memory for both the temporary \texttt{a + b} and the result of \texttt{(a + b) + c}. If we know the former of these will not be reused (which is easy to determine in an AST), we can reuse its memory. In practice, one would write:
+\begin{center}
+\begin{cminted}{python}
+t = numpy.add(a, b)            # Store t = a + b
+return numpy.add(t, c, out=t)  # Reuse t for a + b + c
+\end{cminted}
+\end{center}
+Ein's NumPy backend performs this in-place update optimisation automatically, which is more cache-friendly and saves needless memory allocations. It uses a heuristic approach based on the above observation, and including a check that the destination (\texttt{out}) has the appropriate shape and type.
 
 \subsection{Generalising the NumPy backend}
 
-\textit{The very same methods as in the NumPy can be used in other array programming frameworks. This is because they, in many respects, derive from NumPy. Such a situation applies to the most popular libraries -- PyTorch, TensorFlow, Jax.} \todothis
+\paragraph{Context \& Motivation} The very same methods as in the NumPy can be used in other array programming frameworks -- such as PyTorch, TensorFlow, Jax. This is because they all derive from NumPy, as explained in the Preparation. As a project extension, a PyTorch backend was implemented. PyTorch is a deep learning framework that allows efficient execution on GPUs and other hardware accelerators. It features a set of well-optimised \textit{kernels} for operations common in the domain, with memory movement and asynchronous device calls handled transparently.
 
-\subsubsection{Challenges}
+This project does not explore use of accelerators in much detail. However, it is greatly important to stress the simplicity with which a backend relying on a CPU-oriented NumPy interface is generalised. Existing frameworks already implement hundreds of thousands of lines of code to take advantage of accelerators. This can have orders of magnitude differences in performance in practice.
 
-\subsubsection{Automatic differentiation}
+\paragraph{Automatic differentation} A feature common to all deep learning frameworks is the capability of performing \textit{automatic differentiation} (AD). Notably, we do not implement it directly in Ein. This choice is motivated by AD's availability in Ein's potential backends. Indeed, to differentiate an Ein function, we may use the PyTorch backend and make use of its existing facilities. In the following we compute $\frac{\partial \mathbf{a}^T \mathbf{b}}{\partial \mathbf{a}} = \mathbf{b}$:
+\begin{center}
+\begin{cminted}{python}
+import torch
+# Initialise a pair of vectors with gradient tracking
+a, b = (torch.randn(3).requires_grad_(True) for _ in range(2))
+# Compute a dot product in Ein and execute in PyTorch
+c = reduce_sum(lambda i: wrap(a)[i] * wrap(b)[i]).torch()
+# Run backpropagation in torch through Ein's torch graph
+c.backward()
+return a.grad
+\end{cminted}
+\end{center}
+
+\paragraph{Abstract backend} To facilitate addition of new backends, the \texttt{AbstractArrayBackend} base class was implemented. A staging function may be derived from an instance of this interface. Both the NumPy and PyTorch backends actually implement this same interface. Nearly no extra glue code is necessary, as the only work is necessary is implementing the translating Ein's array calculus to the right API calls.
+
+\subsection{Extrinsics}
+
+\todothis
 
 \section{Repository overview}
 
