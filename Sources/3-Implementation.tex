@@ -220,7 +220,7 @@ We now describe the main analyses applied on Phi calculus, which facilitate furt
 
 \subsection{Specialisations}
 
-\textit{Declarative syntax matching on summation, minimisation, etc. defined by folds, which allows us to infer what high-level operations are applied (e.g. reductions).} \todothis
+\textit{Declarative syntax matching on summation, minimisation, etc. defined by folds, which allows us to infer what high-level operations are applied (e.g. reductions). Similarly special indexing patterns; and tensor contractions -- matrix multiplication generalised to more dimensions.} \todothis
 
 \paragraph{Folds}
 
@@ -261,9 +261,9 @@ A standard transformation in array programming is the array of structs (AoS) to 
 \alpha &::= \sigma \mid \Box \alpha \\
 \tau' &::= \alpha \mid \tau' \times \tau'
 \end{align*}
-Hence, $\tau'$ can only be tuples of multidimensional arrays. This vastly simplifies compilation. 
+Hence, $\tau'$ can only be tuples of arrays. This vastly simplifies compilation and runtime value representation. 
 
-The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \Box \tau_1 \times \Box \tau_2$, i.e. for each array of pairs there exist an equivalent pair of arrays (with all arrays the same size). As such, we need only consider the introduction and elimination forms of arrays of pairs -- comprehensions and indexing. This is shown in Figure \ref{fig:aos-to-soa}, and we apply the transformation directly on the term graph. AoS-to-SoA transformations are also applied in Futhark and $\tilde F$. However, it is not described in detail for $\tilde F$ in the relevant paper.
+The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \Box \tau_1 \times \Box \tau_2$, i.e. for each array of pairs there exist an equivalent pair of arrays (with all arrays the same size). As such, we need only consider the introduction and elimination forms of arrays of pairs -- comprehensions and indexing. This is shown in Figure \ref{fig:aos-to-soa}. We apply the transformation directly on the term graph. An AoS-to-SoA transformation is also applied in $\tilde F$ and Futhark, but it is not described in detail. 
 
 \newcommand{\phisoa}[1]{\mathcal S \left\llbracket {#1} \right\rrbracket}
 \newcommand{\phitupleindex}[2]{\mathcal P \left\llbracket {#1}, {#2} \right\rrbracket}
@@ -333,25 +333,22 @@ lambda env: [2 * i for i in range(env[n])]
 
 We follow the same denotation-guided staging approach as in the naive backend. This time around we apply the whole suite of transformations and use Axial compilation from Phi to the array calculus. The key difference is a stricter value representation that must rely on NumPy's \texttt{ndarray}s. We set all values to be either arrays, or a tuple of arrays. On this basis, we also apply some NumPy-specific performance optimisations.
 
-\paragraph{Bindings} In some cases, NumPy attempts not to copy values where possible, and rather modifies their stride representation. For instance, a matrix might be transposed with \texttt{numpy.transpose(a, (1, 0))}. However, NumPy merely marks the memory layout as transposed -- it returns a \textit{view} -- rather than returning a transposed copy of the data. This is beneficial when the value is used just once, but harmful when it is reused. We make use of a heuristic approach to ensure let-bound values have a cache-efficient memory layout. Whenever a view would be bound to a variable, it is immediately copied to the target layout instead. 
+\paragraph{Bindings} In some cases, NumPy attempts not to copy arrays, and instead changes the stride representation, returning a \textit{view}. For instance, a matrix might be transposed with \texttt{numpy.transpose(a, (1, 0))}. NumPy merely marks the memory layout as transposed, rather than returning a transposed copy of the data. This is beneficial when the value is used just once, but harmful when it is reused. We make use of a heuristic approach to ensure let-bound values have a cache-efficient memory layout. Whenever a view would be bound to a variable, it is immediately copied to the target layout instead. 
 
-It is worth noting here that Ein's let-bindings allow more efficient memory management than a manually-written NumPy program. Usually, new arrays are allocated sequentially with no explicit deallocations. Memory can only be freed by the garbage collector at the end of a function's execution. With let bindings, we achieve higher granularity -- arrays can be freed as soon as they are no longer used.
+Ein's let-bindings enjoy more efficient memory management than a manually-written NumPy program. In typical programs, new arrays are allocated sequentially with no explicit deallocations. Usually, memory can only be freed by the garbage collector at the end of a function's execution. With let bindings we achieve a higher granularity -- arrays can be freed as soon as they are no longer used, without user intervention.
 
-\paragraph{Eliminating temporaries} Where they cannot return a view, NumPy operations allocate fresh memory for the result by default. Operations can be made in-place instead, but idiomatic NumPy programs are difficult to write in this style. 
-This state of matters is suboptimal. Where we want to add three vectors \texttt{(a, b, c)}, the computation \texttt{a + b + c} will allocate memory for both the temporary \texttt{a + b} and the result of \texttt{(a + b) + c}. If we know the former of these will not be reused (which is easy to determine in an AST), we can reuse its memory. In practice, one would write:
+\paragraph{Eliminating temporaries} Where they cannot return a view, NumPy operations allocate fresh memory for the result by default. Operations can be made in-place instead, but idiomatic NumPy programs are inconvenient to write in this style. Consider adding three vectors \texttt{(a, b, c)}. The computation \texttt{a + b + c} will allocate memory for both the temporary \texttt{a + b} and the result of \texttt{(a + b) + c}. If we know the former of these will not be reused (which is easy to determine in an AST), we can reuse its memory. In practice, one would write:
 \begin{center}
 \begin{cminted}{python}
-t = numpy.add(a, b)            # Store t = a + b
-return numpy.add(t, c, out=t)  # Reuse t for a + b + c
+t = numpy.add(a, b)     # Allocate t = a + b
+numpy.add(t, c, out=t)  # Reuse, update t := t + c
 \end{cminted}
 \end{center}
-Ein's NumPy backend performs this in-place update optimisation automatically, which is more cache-friendly and saves needless memory allocations. It uses a heuristic approach based on the above observation, and including a check that the destination (\texttt{out}) has the appropriate shape and type.
+Ein's NumPy backend performs this in-place update optimisation automatically, which is more cache-friendly and saves needless memory allocations. A heuristic approach based on the above observation is applied, including a check that the destination \texttt{out} has the appropriate shape and type (when broadcasting).
 
 \subsection{Generalising the NumPy backend}
 
-\paragraph{Context \& Motivation} The very same methods as in the NumPy can be used in other array programming frameworks -- such as PyTorch, TensorFlow, Jax. This is because they all derive from NumPy, as explained in the Preparation. As a project extension, a PyTorch backend was implemented. PyTorch is a deep learning framework that allows efficient execution on GPUs and other hardware accelerators. It features a set of well-optimised \textit{kernels} for operations common in the domain, with memory movement and asynchronous device calls handled transparently.
-
-This project does not explore use of accelerators in much detail. However, it is greatly important to stress the simplicity with which a backend relying on a CPU-oriented NumPy interface is generalised. Existing frameworks already implement hundreds of thousands of lines of code to take advantage of accelerators. This can have orders of magnitude differences in performance in practice.
+\paragraph{Motivation} The very same methods as in the NumPy can be used in other array programming frameworks -- such as PyTorch, TensorFlow, and Jax. This is because they all derive from NumPy, as explained in the Preparation. A PyTorch backend was implemented as an extension to test this in practice. PyTorch allows efficient execution on GPUs and other hardware accelerators. It features a set of well-optimised \textit{kernels}. This project does not explore the application of accelerators in detail. However, it is critical to stress the simplicity with which the CPU-oriented NumPy backend is generalised. Existing frameworks already implement hundreds of thousands of lines of code to effectively use accelerators. Ein can take advantage of this directly.
 
 \paragraph{Automatic differentation} A feature common to all deep learning frameworks is the capability of performing \textit{automatic differentiation} (AD). Notably, we do not implement it directly in Ein. This choice is motivated by AD's availability in Ein's potential backends. Indeed, to differentiate an Ein function, we may use the PyTorch backend and make use of its existing facilities. In the following we compute $\frac{\partial \mathbf{a}^T \mathbf{b}}{\partial \mathbf{a}} = \mathbf{b}$:
 \begin{center}
@@ -367,7 +364,7 @@ return a.grad
 \end{cminted}
 \end{center}
 
-\paragraph{Abstract backend} To facilitate addition of new backends, the \texttt{AbstractArrayBackend} base class was implemented. A staging function may be derived from an instance of this interface. Both the NumPy and PyTorch backends actually implement this same interface. Nearly no extra glue code is necessary, as the only work is necessary is implementing the translating Ein's array calculus to the right API calls.
+\paragraph{Abstract backend} To facilitate addition of new backends, the \texttt{AbstractArrayBackend} base class was implemented. A staging function may be derived from an instance of this interface. Both the NumPy and PyTorch backends actually implement this same interface. Nearly no extra glue code is necessary, as it is only necessary to translate Ein's array calculus to the corresponding API calls.
 
 \subsection{Extrinsics}
 
