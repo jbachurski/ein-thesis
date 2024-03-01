@@ -1,6 +1,9 @@
 \chapter{Implementation}
 
+% TODO: Roadmap
 We now describe the implementation of the project. We consider the main parts of the compiler in sequence. We begin with the DSL front-end along with its underlying Phi calculus. Afterwards, we consider the compiler middle-end containing various analyses and transformations. Lastly, we describe the NumPy execution back-end, where we also provide a brief overview of a point-free array calculus.
+
+Throughout this section all snippets are excerpts from executable Python code using Ein.
 
 % We describe the implementation from the front-end to the backend, describing the compilation pipeline:
 % \begin{itemize}
@@ -93,6 +96,19 @@ In terms of the semantics of Phi we consider these to be an implementation detai
 
 \paragraph{Invalid sizes} Where an array is defined with a negative size, or a fold was to perform a negative number of iterations, a runtime error is raised. 
 
+\subsection{Embedding in Python}
+
+We internally embed Phi in Python, primarily to allow constructing and validating terms. Conceptually, we implement Phi's grammar as a sum type. In Python we implement this pattern with an abstract base class, where each case corresponds to a child class. To define $\phivec{i}{4}{\phivec{i}{3}{i \cdot j}}$ in this interface, we write:
+\begin{center}
+\begin{cminted}{python}
+i, j = Index(), Index()
+four = Const(Value(4))
+three = Const(Value(3))
+table = Vec(i, four, Vec(j, three, Multiply((at(i), at(j)))))
+\end{cminted}
+\end{center}
+To ensure no invalid terms are constructed, each term infers its \texttt{type} property based on its subterms. To facilitate this, we make use of intrinsically typed variables. Combined with the simplicity of Phi's type system, we can easily implement a compositional (bottom-up) type inference method.
+
 
 % \section{Ein -- shallow-embedded language}
 \section{Frontend -- Ein}
@@ -121,14 +137,14 @@ Furthermore, during tracing Ein performs a form of basic type inference on the u
 
 \subsection{Combinators}
 
-The central part of Ein are the pointful, comprehension-style primitives: \texttt{array} and \texttt{fold}. Anonymous functions, defined with the \mintinline{python}{lambda} keyword, are applied to facilitate introduction of new variables -- for instance, the index in an array comprehension. Symbols for these variables are generated uniquely, and we compare them via Python object identity. As such, \mintinline{python}{array(lambda i: i, size=5)} describes the Phi expression $\phivec{i}{5}{i}$. Further, the summation in $\philet{a}{\phivec{i}{5}{i^2}}{ \sum_{i=0}^{4} a[i]}$ is expressed with a \texttt{fold}:
+The central part of Ein are the pointful, comprehension-style primitives: \texttt{array} and \texttt{fold}. Anonymous functions, defined with the \mintinline{python}{lambda} keyword, are applied to facilitate introduction of new variables -- for instance, the index in an array comprehension. As such, \mintinline{python}{array(lambda i: i, size=5)} describes the Phi expression $\phivec{i}{5}{i}$. Further, the summation in $\philet{a}{\phivec{i}{5}{i^2}}{ \sum_{i=0}^{4} a[i]}$ is expressed with a \texttt{fold}:
 \begin{center}
 \begin{cminted}{python}
 a = array(lambda i: i*i, size=5)
 s = fold(0, lambda i, acc: acc + a[i])
 \end{cminted}
 \end{center}
-We avoid explicit variable introductions by making use of the host language's lambda functions, in a manner similar to \textcite{atkey2009unembedding} and Jax. The explicit approach is taken surprisingly often for its drawbacks -- for instance in the SymPy algebra library or TACO. In the latter this amounts to having to write:
+Symbols for these variables are generated uniquely, and we compare them internally via Python object identity -- this saves us from many problems typical to the usual use of non-unique names. We avoid explicit variable introductions by making use of the host language's lambda functions, in a manner similar to \textcite{atkey2009unembedding} and Jax. The explicit approach is taken surprisingly often for the drawbacks it has -- for instance in the SymPy algebra library or Taco. In the latter this amounts to having to write:
 \begin{center}
 \begin{cminted}{python}
 i, j = pytaco.get_index_vars(2)  # explicit introduction
@@ -139,7 +155,7 @@ This is evidently flawed, as there is nothing guarding against the reuse of vari
 
 It is worth noting that Ein's combinators introduce nested code blocks. This information is missing in traced expressions. Instead, we recover blocks via loop-invariant code motion in the middle-end.
 
-Ein's combinators represent a step up in the expressive power of the array programming model. We previously noted NumPy is a first-order interface, in that its operations cannot be parameterised by functions. On the other hand, \texttt{array} and \texttt{fold} are second-order, similarly to Futhark's Second-Order Array Combinators. These are still beneficial despite no complete language support for higher-order functions.
+Ein's combinators represent a step up in the expressive power of the array programming model. We previously noted NumPy is a first-order interface, in that its operations cannot be parameterised by functions. On the other hand, \texttt{array} and \texttt{fold} are closer to Futhark's Second-Order Array Combinators. These are still hugely beneficial despite no language support for higher-order functions.
 
 \subsection{Size inference}
 
@@ -157,13 +173,13 @@ array(lambda i: a[i] + b[i])
 \end{center}
 Specifically, for any index \texttt{i} that does not have an explicit \texttt{size} defined, it is inferred by taking the size of any array \texttt{a} that is indexed directly with \texttt{i} (i.e. in an expression \texttt{a[i]}), which we find by term graph traversal. Where there are other such candidates \texttt{b}, we add a program assertion that \texttt{a} and \texttt{b} have the same size. We further generalise this to the \texttt{fold} combinator. Its loop counter is often used to iterate over arrays.
 
-This is not as obvious to implement correctly as it seems at first sight. Any sizes cannot depend on a comprehension index (due to the Phi typing rules) nor on a value from an inner scope. Various checks and simplifications are performed to avoid bad candidates for an inferred array size.
+This is not as obvious to implement correctly as it seems at first sight. Due to the Phi typing rules, any sizes cannot (even indirectly) depend on a comprehension index nor on a value from an inner scope. Various simplifications and checks are performed to avoid bad candidates for an inferred array size.
 
 There are many mechanisms similar to size inference, for instance in Single-Assignment C and in a more structured way in Dex via its value-dependent type inference. In DSLs taking direct inspiration from Einstein summation, such approaches are often the only way of specifying array sizes. Ein also provides the flexibility of providing an explicit array size, as shown in the former example.
 
 \subsection{Records}
 
-One might notice the lack of inclusion of pairs in the \texttt{Array} type. These are modelled separately. In fact, pair types of Phi are sufficient to represent (labelled) record types. We use a basic list-like encoding where the type $\{ x: \phiinttype, y: \phiinttype, z: \phiinttype \}$ is represented as $\phipairtype{\phiinttype}{\left( \phiinttype \times \phiinttype \right)}$. For convenience, we directly use standard Python types to represent Ein record values. We can write:
+One might notice the lack of inclusion of Phi's pairs in the \texttt{Array} type. These are modelled separately. In fact, use pair types as a sufficient representation for (labelled) record types. We use a basic list-like encoding where the type $\{ x: \phiinttype, y: \phiinttype, z: \phiinttype \}$ is represented as $\phipairtype{\phiinttype}{\left( \phiinttype \times \phiinttype \right)}$. We then directly use standard Python container types to represent Ein record values, and in fact arrays can contain these types as elements. We can write:
 \begin{center} 
 \begin{cminted}{python}
 a = array(lambda i: {"x": i, "y": i*i, "z": i*i*i}, size=10)
@@ -173,7 +189,7 @@ assert a[4]["y"].eval() == 16
 \end{center}
 In fact, arbitrary \textit{layouts} consisting of Python tuples, dictionaries, and dataclasses can be used as array elements -- and these are reconstructed when indexing into these arrays. This feature relies on the layouts being \textit{static}. The only dynamically-sized values are arrays, which are handled through the \texttt{Vec} class. 
 
-This feature enables a new style of array programming, unavailable in existing libraries. It is possible to describe composable array structures of custom data types and define operations on them. For instance, one could define an array of dual numbers\footnote{Dual numbers are similar to complex numbers, but instead of the imaginary unit $i^2 = -1$ we instead have a symbol $\varepsilon^2 = 0$. They are particularly useful in forward-mode automatic differentiation, and one could use them for this purpose in Ein.} with arrays of dataclasses:
+This feature enables a new style of array programming, unavailable in existing libraries. It is possible to describe composable array structures of custom data types and define operations on them. For instance, one could define an array of dual numbers\footnote{Dual numbers are similar to complex numbers, but instead of the imaginary unit $i^2 = -1$ we instead have a symbol $\varepsilon^2 = 0$. They are particularly useful in forward-mode automatic differentiation, and one could use them for this purpose in Ein.} with arrays of dataclasses (Python's rendition of records):
 \begin{center}
 \begin{cminted}{python}
 @dataclass
@@ -190,9 +206,8 @@ a = array(lambda i: Dual(i, 1), size=5)  # constructs Vec[Dual]
 b = array(lambda i: a[i] * a[i])  # calls Dual.__mul__
 \end{cminted}
 \end{center}
-In contrast, traditional libraries in the array programming model struggle to achieve this sort of composability. Since they consider whole arrays at a time, at best one could define a series of types (vectors, matrices,~...) for dual numbers. In a pointful paradigm, where we focus on individual elements, we can define custom scalar datatypes and consider arrays of them. Futhark possesses similarly powerful ML-style record types.
-
-What is more, efficient runtime representation of these structures is ensured via various program transformations. Record types in Ein are a \textbf{zero-cost abstraction}. We return to this claim in the Evaluation.
+In contrast, traditional libraries in the array programming model struggle to achieve this sort of composability. Since they consider \textit{whole arrays of primitives} at a time, at best one could define a series of types (vectors, matrices,~...) for dual numbers. In a pointful paradigm, where we focus on individual elements, we can neatly define custom scalar datatypes and consider arrays of them. Futhark also features similar ML-style record types.
+What is more, efficient runtime representation of these structures is ensured via various program transformations. Record types in Ein are a \textbf{zero-cost abstraction}.
 
 \section{Analyses}
 

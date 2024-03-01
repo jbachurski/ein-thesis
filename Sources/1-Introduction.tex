@@ -14,12 +14,11 @@ logits = (
     transpose(att_1, (0, 2, 1, 3)) +  # + [B, H, N, 1]
     transpose(att_2, (0, 2, 3, 1)) +  # + [B, H, 1, N]
     transpose(att_e, (0, 3, 1, 2)) +  # + [B, H, N, N]
-    expand_dims(att_g, axis=-1)       # + [B, H, 1, 1]
+    expand_dims(att_g, axis=[-1, -2]) # + [B, H, 1, 1]
 )                                     # = [B, H, N, N]
-coefs = softmax(leaky_relu(logits) + bias_mat, axis=-1)
-ret = matmul(coefs, values)  # [B, H, N, F]
-ret = transpose(ret, (0, 2, 1, 3))  # [B, N, H, F]
-ret = reshape(ret, ret.shape[:-2] + (self.out_size,))  # [B, N, H*F]
+values = numpy.transpose(values, (0, 2, 1, 3))  # [B, H, N, F]
+ret = matmul(c, values)  # [B, H, N, F]
+return transpose(ret, (0, 2, 1, 3))  # [B, N, H, F]
 \end{minted}
 \end{minipage} \end{center}
 %TC:endignore
@@ -44,4 +43,19 @@ The main aim of the project is to design and implement a domain-specific languag
     \item Since Python is such an important aspect of the target domain, the finished product needs to be easy-to-use in it. Attention should be paid to practicality and a good programmer experience.
     \item Due to the significant effort needed to produce efficient array code targeting all kinds of hardware, the compiler should capitalise on existing efforts in established projects to achieve this universality.
 \end{itemize}
-Based on these criteria, I chose to shallow-embed a new pointful array language in Python, and to compile it to calls in the NumPy library in a fashion that is easy to generalise to similar targets.
+Based on these criteria, I chose to shallow-embed a new pointful array language in Python, and to compile it to calls in the NumPy library in a fashion that is easy to generalise to similar targets. 
+
+\paragraph{Foreshadowing} The motivating example translates to the following code in my new language:
+\begin{center}
+\begin{cminted}{python}
+logits = array(
+    lambda b, h, u, v: s[b, u, h] + t[b, v, h] + e[b, u, v, h] + g[b, h]
+)
+return array(
+    lambda b, u, h, f: reduce_sum(
+        lambda v: c[b, h, u, v] * values[b, v, h, f]
+    )
+)
+\end{cminted}
+\end{center}
+The code became much closer to an index-oriented mathematical notation. All of the cryptic transpositions are gone, and the nature of the matrix multiplication became evident.
