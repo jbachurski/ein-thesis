@@ -6,7 +6,7 @@ APL's ideas certainly stood the test of time in its various implementations and 
 
 \section{Motivation}
 
-When I found myself in a deep learning research team, I was shocked to see novel model architectures attract Python implementations as troublesome as \href{https://github.com/google-deepmind/clrs/blob/8697f51663bd77548f4b3108816c84d163883361/clrs/_src/processors.py#L140}{this one}, which I paraphrase below in the style of \textit{NumPy}:
+When I found myself in a deep learning research team, I was shocked to see novel model architectures attract Python implementations as troublesome as \href{https://github.com/google-deepmind/clrs/blob/8697f51663bd77548f4b3108816c84d163883361/clrs/_src/processors.py#L140}{this one}, which I paraphrase below in the style of \textit{NumPy:}
 \begin{center} \begin{minipage}{0.65\textwidth}
 \begin{minted}{python}
 logits = (
@@ -15,7 +15,7 @@ logits = (
     transpose(att_e, (0, 3, 1, 2)) +  # + [B, H, N, N]
     expand_dims(att_g, axis=[-1, -2]) # + [B, H, 1, 1]
 )                                     # = [B, H, N, N]
-values = numpy.transpose(values, (0, 2, 1, 3))  # [B, H, N, F]
+values = transpose(values, (0, 2, 1, 3))  # [B, H, N, F]
 ret = matmul(c, values)  # [B, H, N, F]
 return transpose(ret, (0, 2, 1, 3))  # [B, N, H, F]
 \end{minted}
