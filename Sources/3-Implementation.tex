@@ -70,8 +70,8 @@ $$ \phifold{i}{n}{x}{0.0}{x + a[i]} $$
 
 The type system of Phi is relatively straightforward, except for the handling of indices. Type constructors are unconstrained, and we allow arrays of pairs (missing from most array frameworks).
 \begin{align*}
-\mathrm{\sigma} &::= \phifloattype \mid \phiinttype \mid \phibooltype & \text{(scalar types)} \\
-\tau &::= \mathrm{\sigma} \mid \phivectype{\tau} \mid \phipairtype{\tau}{\tau} & \text{(Phi types -- scalars, vectors, pairs)}
+\sigma &::= \phifloattype \mid \phiinttype \mid \phibooltype & \text{(scalar types)} \\
+\tau &::= \sigma \mid \phivectype{\tau} \mid \phipairtype{\tau}{\tau} & \text{(Phi types -- scalars, vectors, pairs)}
 \end{align*}
 The typing judgement $\Gamma; \Delta \vdash e : \tau$ is slightly non-standard due to the presence of indices. We use a separate environment for variables $\Gamma$ and indices $\Delta$. Consider the rules for array comprehensions and folds:
 \begin{center}
@@ -187,12 +187,11 @@ class Dual:
             self.real * other.eps + self.eps * other.real
         )
 
-a = array(lambda i: Dual(i, 1), size=5)  # constructs Vec[Dual]
+a = array(lambda i: Dual(i, 1.), size=5)  # constructs Vec[Dual]
 b = array(lambda i: a[i] * a[i])  # calls Dual.__mul__
 \end{cminted}
 \end{center}
-In contrast, traditional libraries in the array programming model struggle to achieve this sort of composability. Since they consider \textit{whole arrays of primitives} at a time, at best one could define a sub-classed array type of dual numbers, but this would not compose as well. In a pointful paradigm where we focus on individual elements, we can neatly define custom datatypes and consider arrays of them. A similar feature is available in Futhark (ML-style records).
-What is more, efficient representation of these structures is ensured via program transformations. Record types in Ein are a \textbf{zero-cost abstraction}.
+In contrast, most renditions of the array programming model struggle to achieve this sort of composability. Since they consider \textit{whole arrays of primitives} at a time, at best one could define a sub-classed array type of dual numbers, but this would not compose as well. In a pointful paradigm where we focus on individual elements, we can neatly define custom datatypes and consider arrays of them. What is more, efficient representation of these structures is ensured via program transformations. Record types in Ein are a \textbf{zero-cost abstraction}. A similar feature is available in Futhark (ML-style records).
 
 \subsection{Value system}
 
@@ -252,19 +251,61 @@ There are many mechanisms similar to size inference, for instance in Single-Assi
 
 We now describe the main analyses applied on Phi calculus, which facilitate further transformations and efficient code generation. Since Ein produces Phi term graphs through the tracing process, this is the main form on which we perform our analyses and transformations.
 
+\subsection{Normalisation of high-level operations}
+
+\begin{center}
+    \textcolor{red}{Not happy with how this looks right now. The notation is really messy, and the concept of what is opaque and what is in the normal form is left unclear.}
+\end{center}
+
+% \textit{Declarative syntax matching on summation, minimisation, etc. defined by folds, which allows us to infer what high-level operations are applied (e.g. reductions). Similarly special indexing patterns; and tensor contractions -- matrix multiplication generalised to more dimensions.} \todothis
+
+A particular feature of our compilation setting is that both the source and target languages are relatively high-level. Furthermore, the compilation target (NumPy, in the array programming model) has many primitives that perform specific high-level operations. Therefore, to obtain fast array code, we need to recover some of these specialised operations.
+
+A naive approach would be to simply match on the syntax of the operations we perform. However, this would be a volatile approach, as small changes to the source code might result in the optimisation no longer being applied. We instead use a technique similar to \textit{normalisation by evaluation} (NbE). For each expression, we consider the normal form of its subexpressions. Then we compose these normal forms by appealing to the denotational semantics of Phi.
+
+\paragraph{Reductions} Recall that NumPy only offers reductions for some operations. This is part of the reason why they are not directly integrated in Phi. Still, the compiler should be able generate:
+$$ \phifold{i}{n}{x}{0.0}{x + a[i]} \leadsto \texttt{numpy.sum}(\texttt{a}) $$
+For this simple case, we just match on the Phi syntax, but we allow any initial value for the accumulator. We use the normal form:
+$$ \left\llbracket \phifold{i}{n}{x}{e}{x + f(i)} \right\rrbracket = e + \mathrm{sum}( \underline{\phivec{i}{n}{f(i)}} ) $$
+We will use $\underline{e}$ to denote \textit{opaque} terms in Phi when they are a part of the normal form.
+
+\paragraph{Clipped shifts} Suppose that we want to compute the difference array $d$ of $a$, given by: 
+$$ d = \phivec{i}{n}{a[\min(i + 1, n - 1)] - a[i]} $$ 
+To express this in NumPy we need to use whole-array operations. Say we first compute the left hand side operand. We need to make use of \textbf{slicing} (taking subarrays) and \textbf{padding} as follows:
+\begin{center}
+\begin{cminted}{python}
+numpy.pad(
+  a[1:],      # slice starting at 1
+  (0, 1),     # pad 1 at end
+  mode='edge' # use end value for pad
+)
+\end{cminted}
+\end{center}
+We argue that such a pattern can be expressed in Phi in general with:\footnote{This does not take into account different step sizes possible in slicing. This interacts with padding in unexpected ways, and further complicates the algebra, so we leave it out.}
+$$ a[\min(\max(i + s, l), h)] $$
+Where the terms $s, l, h$ do not have any free Phi indices, and $i$ is an index which is not free in $a$. Intuitively, this patterns shifts the index $i$ by $s$, and then clips it in the range $\left[ l, h \right]$.
+
+We first describe the normal forms for $i + s$:
+\begin{align*}
+i &= i + \underline{0} \\
+\underline{s'} + (i + \underline{s}) &= (i + \underline{s}) + \underline{s'} = i + \underline{s + s'} \\
+\end{align*}
+We can then build up the normal forms for $\min(\max(i + s, l), h)$:
+\begin{align*}
+i + \underline{s} &= \min(\max(i + \underline{s}, -\infty), +\infty) \\ 
+\min(\min(\max(i + \underline{s}, \underline{l}), \underline{h}), \underline{h'}) &= \min(\max(i + \underline{s}, \underline{l}), \underline{\min(h, h')}) \\ 
+\max(\min(\max(i + \underline{s}, \underline{l}), \underline{h}), \underline{l'}) &= \min(\max(i + \underline{s}, \underline{\max(l, l')}), \underline{\max(h, l')})
+\end{align*}
+Where an index has a clipped-shift normal form, an appropriate slice and pad can be synthesised. 
+
+\paragraph{Generalised tensor contractions}
+
+\todothis
+
 \subsection{Size equivalences}
 
 \textit{Using equality assertions to create an equivalence judgement between sizes. Used for determining safety to elide some indexing operations and that operations do not explode memory usage.} \todothis 
 
-\subsection{Normalisation of high-level operations}
-
-A particular feature of our compilation setting is that both the source and target languages are relatively high-level. Furthermore, the compilation target (NumPy, in the array programming model) has many primitives for performing specific high-level operations.
-
-% \textit{Declarative syntax matching on summation, minimisation, etc. defined by folds, which allows us to infer what high-level operations are applied (e.g. reductions). Similarly special indexing patterns; and tensor contractions -- matrix multiplication generalised to more dimensions.} \todothis
-
-\paragraph{Clipped shifts}
-
-\paragraph{Generalised tensor contractions} 
 
 \section{Transformations}
 \label{compiler-transformations}
@@ -273,36 +314,36 @@ A particular feature of our compilation setting is that both the source and targ
 
 The term graph form produced by Ein is particularly useful when performing analyses, as not as much information has to be carried through in contexts. However, it is not an intermediate representation apt for generating executable code. It lacks information on where values used multiple times should be stored and when should they be computed. To address this, we want to convert our \textbf{term graph} into an \textbf{abstract syntax tree}. We refer to this process as \textit{outlining}. The goal is inserting appropriate let bindings in a semantic-preserving fashion, while preventing recomputation of expressions many times. Notably, \textit{inlining} (which is also used) corresponds to removal of the let bindings inserted by outlining. We perform it simply by directly substituting all bindings, returning the AST to the term graph form.
 
-The two main techniques applied are \textbf{common subexpression elimination} and \textbf{loop-invariant code motion}. The former addresses avoiding computations like $e + e$ (for a \textit{non-atomic} expression $e$), which is replaced by $\philet{x}{e}{x + x}$. Meanwhile, the latter ensures that terms constant across loop iterations are computed outside the loop. For instance, we want to perform the following:
+The two main techniques applied are \textbf{common subexpression elimination} and \textbf{loop-invariant code motion}. The former rewrites computations like $e + e$ (for a \textit{non-atomic} expression $e$) to  $\philet{x}{e}{x + x}$. Meanwhile, the loop-invariant motion ensures that terms constant across loop iterations are computed before the loop. For instance, if we want to perform the following rewrite:
 $$ 
 \phivec{i}{n}{a[i] + \left( \phivec{j}{n}{2 \cdot b[j]} \right)[i]} \quad\leadsto\quad \philet{c}{\phivec{i}{n}{2 \cdot b[i]}}{\phivec{i}{n}{a[i] + c[i]}} 
 $$
-We consider both of these transformations to be a special cases of let insertion. As such, the implementation focuses on determining the expressions which should be let-bound. In addition, we need to determine the program point at which the binding should be performed. For simplicity, we associate program points with nodes in the term graph -- which are just terms. We have reduced the problem to determining for each term $t$, a list of terms $t'$ so that we transform $t \leadsto \philet{x}{t'}{[x/t']t}$. The substitution of a variable $x$ for $t'$ is performed by syntactic equivalence.
+We consider both of these transformations to be a special cases of let insertion. As such, the implementation focuses on determining the expressions which should be let-bound. In addition, we need to determine the program point at which the binding should be performed. For simplicity, we associate program points with nodes in the term graph -- which are just terms. We have reduced the problem to determining for each term $t$, a list of terms $t'$ so that we transform $t \leadsto \philet{x}{t'}{[x/t']t}$. The substitution of a variable $x$ for $t'$ is performed by syntactic replacement.
 
-An important simplification of the problem setup is that Phi calculus is entirely pure (there are no side effects). Any let insertions performed in this manner of ``reverse-substitution'' preserve program semantics. Additionally, we make use of the assumption that all subexpressions are evaluated at least once. Recall that conditionals in Phi evaluate both conditional branches, and the same premise is reasonable for loops.
+An important simplification of the problem setup is that Phi calculus is entirely pure (there are no side effects). Any let insertions performed in this manner of ``reverse-substitution'' preserve program semantics. Additionally, we make use of the assumption that all subexpressions are evaluated at least once. Recall that conditionals in Phi evaluate both conditional branches. We similarly assume all loops iterate at least once.
 
-\paragraph{Common subexpression elimination} We perform CSE via a standard method on term graphs, which is by application of \textbf{dominators}. Consider a graph in which there is an edge $t \to t'$ whenever $t'$ is a direct subterm of $t$. Then consider the immediate dominator $t^*$ of a term $t$. By definition, we learn that $t^*$ is the smallest term that contains all instances of $t$ as a subterm. In fact, this indicates that we should let-bind $t$ at $t^*$. We perform this let-insertion for every non-atomic term $t$ for which $\mathrm{indeg}\,t > 1$. This common subexpression elimination produces an abstract syntax tree given any term graph.
+\paragraph{Common subexpression elimination} We perform CSE via a standard method on term graphs, which is by application of \textbf{dominators}. Consider a graph in which there is an edge $t \to t'$ whenever $t'$ is a direct subterm of $t$. Then consider the immediate dominator $t^*$ of a term $t$. By definition, we learn that $t^*$ is the smallest term that contains all instances of $t$ as a subterm. This indicates that we should let-bind $t$ at $t^*$. We perform this let-insertion for every non-atomic term $t$ for which $\mathrm{indeg}\,t > 1$. This common subexpression elimination produces an abstract syntax tree given any term graph.
 
-We compute the immediate dominators with the \texttt{networkx} package, which is done in $O(n^2)$ worst-case time. An implementation for directed acyclic graphs could be optimised to $O(n \log n)$.
+We compute the immediate dominators with the \texttt{networkx} package, which has $O(n^2)$ time complexity in the worst-case. An implementation for directed acyclic graphs could be optimised to $O(n \log n)$.
 
 \paragraph{Loop-invariant code motion} We tackle the problem of recomputing values invariant across loop iterations. We want to compute these prior to the loop. We consider \textit{loop terms} to be $\Phi$ and $\mathrm{fold}$. 
 
-Since after CSE we have an AST, we can perform a tree traversal on it. For each term $t$, there is a stack of loop terms that it is a subterm of, and we can keep update it as part of the traversal. Each of these loop terms $s_\ell$ (and any let-bindings inside) introduces a set of symbols $S_\ell$, so the stack induces a sequence $(S_1, S_2, \dots, S_k)$. Denote the free symbols in $t$ as $T$. We make the following observation about scopes: if $\left( S_\ell \cup \cdots \cup S_k \right) \cap T = \emptyset$, then it is safe to let-bind $t$ prior to the loop $s_\ell$. On the other hand, $t$ will be computed the fewest times if it is moved to the outermost loop. Hence, we pick the minimum $\ell$ that preserves lexical scopes. We find and insert this let-binding for all non-atomic terms $t$.
+Since after CSE we have an AST, we can perform a tree traversal on it. For each term $t$, there is a stack of loop terms that it is a subterm of, and we can update it as part of the traversal. Each of these loop terms $s_\ell$ (and any let-bindings inside) introduces a set of symbols $S_\ell$, so the stack induces a sequence $(S_1, S_2, \dots, S_k)$. Denote the free symbols in $t$ as $T$. We observe the following: if $\left( S_\ell \cup \cdots \cup S_k \right) \cap T = \emptyset$, then it is safe to let-bind $t$ prior to the loop $s_\ell$. On the other hand, $t$ will be computed the fewest times if it is moved to the outermost loop. Hence, we pick the minimum $\ell$ that preserves lexical scopes. We find and insert this let-binding for all non-atomic terms $t$.
 
-A particularly tricky part of the implementation is the ordering in which these insertions are performed. An attentive reader may notice that the wrong choices result in scope errors or infinite terms. However, a careful implementation avoids these issues. 
+A particularly tricky part of the implementation is the ordering in which these insertions are performed. Making the wrong choices results in scope errors or infinite terms. However, a careful implementation avoids these issues. 
 
 Lastly, there are cases in which bindings may become trivial, i.e. of the form $\philet{x}{y}{e}$. To erase these, we perform a basic form of \textbf{copy propagation} by inlining (substituting) all trivial bindings.
 
 \subsection{Array-of-structs to struct-of-arrays}
 
-A standard transformation in array programming is the array of structs (AoS) to struct of arrays (SoA) representation transformation. Using it, the Ein compiler reduces all arrays to simple arrays of primitive types, as our compilation target -- NumPy,\footnote{Technically, NumPy does allow defining custom \texttt{dtype}s, but this feature is limited in use and intended for (de)serialising binary data. Corresponding features are not available in deep learning frameworks, so relying on this is undesirable.} and array libraries generally -- lack support for arrays of composite types like pairs. Furthermore, recall the definition of types in Phi. Once we eliminate arrays of pairs, the only types $\tau'$ are given by:
+A standard technique in array programming is the array of structs (AoS) to struct of arrays (SoA) transformation. The Ein compiler uses it to reduce away the arbitray vector types to simple arrays of primitive types. This is important, as our compilation target -- NumPy,\footnote{Technically, NumPy does allow defining custom \texttt{dtype}s, but this feature is limited in use and intended for (de)serialising binary data. Corresponding features are not available in deep learning frameworks, so relying on this is undesirable.} and array libraries generally -- lack support for arrays of composite types like pairs. Furthermore, recall the definition of types in Phi. Once we eliminate arrays of pairs, the only types $\tau'$ are given by:
 \begin{align*}
 \alpha &::= \sigma \mid \Box \alpha \\
 \tau' &::= \alpha \mid \tau' \times \tau'
 \end{align*}
-Hence, $\tau'$ can only be tuples of arrays. This vastly simplifies compilation and runtime value representation. As such, an AoS-to-SoA transformation is also applied in $\tilde F$ and Futhark, but it is not described in detail. 
+Hence, $\tau'$ can only be tuples of arrays. This vastly simplifies compilation and runtime value representation. An AoS-to-SoA transformation is also applied in $\tilde F$ and Futhark, but it is not described in detail. 
 
-The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \Box \tau_1 \times \Box \tau_2$, i.e. for each array of pairs there exist an equivalent pair of arrays (with all arrays the same size). As such, we need only consider the introduction and elimination forms of arrays of pairs -- comprehensions and indexing. The transformation is depicted in Figure \ref{fig:aos-to-soa}. We apply it directly on the term graph. 
+The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \Box \tau_1 \times \Box \tau_2$, i.e. for each array of pairs there is an equivalent pair of arrays (with all arrays the same size). As such, we need only consider the introduction and elimination forms of arrays of pairs -- comprehensions and indexing. The transformation is depicted in Figure \ref{fig:aos-to-soa}. We apply it directly on the term graph. 
 
 \newcommand{\phisoa}[1]{\mathcal S \left\llbracket {#1} \right\rrbracket}
 \newcommand{\phitupleindex}[2]{\mathcal P \left\llbracket {#1}, {#2} \right\rrbracket}
@@ -327,37 +368,113 @@ The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \B
 &\text{(and similarly for other cases)} \\[0.5em]
 \phisoa{\phivectype{(\phipairtype{\tau_1}{\tau_2}})} &= \phipairtype{\phivectype{\tau_1}}{\phivectype{\tau_2}} &\text{(identity otherwise)}
     \end{align*}
-    \caption{AoS-to-SoA transformation on Phi, written $\mathcal S$. $\mathcal P$ maps an indexing to all arrays in the tuple. Environments $\Gamma; \Delta$ are passed through implicitly, in accordance with typing rules.}
+    \caption{A type-driven AoS-to-SoA transformation on Phi, denoted by $\mathcal S$. $\mathcal P$ maps an indexing to all arrays in the tuple. Environments $\Gamma; \Delta$ are passed through implicitly, in accordance with typing rules.}
     \label{fig:aos-to-soa}
 \end{figure}
 
 \section{Code generation -- Escaping the Pointless}
 \label{escaping-the-pointless}
 
+We now finally talk about how we can make the step from the pointful Phi calculus into the point-free array programming model. In order to create an extra layer of abstraction, we devise the \textit{array calculus}, which is the final program representation we use before execution. Afterwards, we give a novel connection between pointful and point-free array programming. This is achieved through the \textit{Axial} applicative functor. We show how programs are compiled by \textit{lifting} them into the Axial. Lastly, we show some optimisations performed on the 
+We now finally talk about how we can make the step from the pointful Phi calculus into the point-free array programming model. In order to create an extra layer of abstraction, we devise the \textit{array calculus}, which is the final program representation we use before execution. Afterwards, we give a novel connection between pointful and point-free array programming. This is achieved through the \textit{Axial} applicative functor. We show how programs are compiled by \textit{lifting} them into the Axial.
+
 \subsection{Array calculus}
 
-\textit{We first formalise our compilation target for Phi, since so far it has only been vaguely described as the API of the NumPy library.} \todothis
+% \textit{We first formalise our compilation target for Phi, since so far it has only been vaguely described as the API of the NumPy library.} \todothis
+
+We use a relatively straightforward formalisation, which abstracts the interface of NumPy:
+\begin{align*}
+e ::=&\quad \mathrm{range}(e)   &\text{(iota -- sequence of }\mathbb N\text{ from }0\text{)} \\
+\mid&\quad \mathrm{transpose}(e, (n, \dots)) &\text{(permute axes)} \\ 
+\mid&\quad \mathrm{squeeze}(e, (n, \dots)) &\text{(remove 1-dimensions)} \\
+\mid&\quad \mathrm{unsqueeze}(e, (n, \dots)) &\text{(add 1-dimensions)} \\
+\mid&\quad \mathrm{repeat}(e, e, n) &\text{(repeat array along axis)} \\
+\mid&\quad \mathrm{gather}(e, e, n) &\text{(indexing along axis }n \in \mathbb N\text{)} \\ 
+\mid&\quad \mathrm{elementwise}_u(e, \dots, e) &\text{(elementwise op. }u\text{)} \\
+\mid&\quad \langle e, \dots \rangle \quad\mid\quad \pi_i(e) &\text{(tuples and projections)} \\
+\mid&\quad \philet{x}{e}{e} &\text{(non-recursive let binding)} \\
+\mid&\quad \phifold{x}{e}{x}{e}{e} &\text{(indexed fold)} \\
+\mid&\quad x \quad\mid\quad v  &\text{(variables, constants)}
+\end{align*}
+This is the basic formulation into which we can compile Phi. It is extended with reductions $\mathrm{reduce}_u(e, n)$ along an axis, specialised indexing operations (taking, slicing), padding, and linear algebra primitives (in the form of generalised Einstein summation).
+
+This abstraction strives to provide an interface through which various execution backends can be implemented. Note that the only significant common part with Phi is the indexed fold. In particular, indices $i$ from array comprehensions are erased entirely. In fact, the compilation scheme guarantees that no array comprehension $\Phi$ results in a $\mathrm{fold}$. Otherwise, compiling Phi would be much easier.
 
 \subsection{Axials}
 
-\textit{\textbf{Axials} are the key research contribution of this work.}
+\textbf{Axials} are the key research contribution of this work. They form a novel connection between pointful and point-free array programming. Their structure is natural, in the sense that it forms an applicative functor.
 
-$$ \mathrm{VarEnv} \times \mathrm{IndexEnv} \to \mathrm{Value} \,\simeq\, \mathrm{VarEnv} \to \mathrm{NDArray}\, \mathrm{Value} $$
+\begin{center}
+    \textcolor{red}{This section is rather waffly, and I'm not sure it achieves everything it should despite talking much. The compilation scheme description is of course missing, problem being that it actually does not use exactly the same axials as the part preceding it.}
+\end{center}
+
+
+\paragraph{Motivation}
+
+To motivate the introduction of axials, we appeal to the separation of variables in Phi. Indeed, we take indices $i$ to be separate from the usual variables $x$. Hence, there is a similar separation of the environment $\mathrm{Env} \equiv (\mathrm{Var} + \mathrm{Index}) \to \mathrm{Value}$:
+$$ \mathrm{Env} \simeq \mathrm{VarEnv} \times \mathrm{IndexEnv} $$
+We use $A \simeq B$ to denote an isomorphism, where there exist a bijection between values of type $A$ and $B$. Let us now consider the denotation of a Phi expression $e$, given by $\llbracket e \rrbracket : \mathrm{Env} \to \mathrm{Value}$. This time, we can apply the currying isomorphism:
+$$\llbracket e \rrbracket : \mathrm{Env} \to \mathrm{Value} \simeq \mathrm{VarEnv} \times \mathrm{IndexEnv} \to \mathrm{Value} \simeq \mathrm{VarEnv} \to (\mathrm{IndexEnv} \to \mathrm{Value})$$
+We bring close attention to the structure of $\mathrm{IndexEnv} \to \mathrm{Value}$. Since indices are only introduced in array comprehensions, we know their values must range over a range of natural numbers of the form $i \in \left[ 0, n_i \right)$. We denote $n_i$ as the size of the range of an index $i$, as introduced in $\phivec{i}{n_i}{e}$. Indeed, this leads us to say that the domain of $\mathrm{IndexEnv}$ is of the form:
+$$ \mathrm{dom}\,\mathrm{IndexEnv} \simeq \left[0, n_i \right) \times \left[0, n_j \right) \times \left[0, n_k \right) \times \dots $$ 
+where $\iota = \{i, j, k, \dots \}$ are the free indices in $e$. But this gives a whole lot of structure to $\mathrm{IndexEnv}$. Indeed, the \textit{index space} directly corresponds to that of a $\iota$-dimensional array of shape $(n_i, n_j, n_k, \dots)$. Let us denote $\mathrm{Array}_d$ as the type of $d$-dimensional homogeneous arrays. We have the following connection:
+$$ \mathrm{IndexEnv} \to \mathrm{Value} \simeq [\iota] \to \mathrm{Array}_{|\iota|}\, \mathrm{Value} $$
+We have obtained that expressions of type $\tau$ dependent on indices $\iota$ can be evaluated as a $|\iota|$-dimensional array of $\tau$. However, for this to be the case, we need to order $\iota$ into a sequence. This way, we can associate each index $i$ to an axis in the array. Additionally, we need to determine the size $n_i$ for each index $i \in \iota$. The $[\iota]$ type fulfils these roles, and we take it to be the permutations on $\iota$ endowed with $\iota \to \mathbb N$.
+
+We can finally substitute the result back into the type of $\llbracket e \rrbracket$:
+$$ \boxed{ \llbracket e \rrbracket : \mathrm{VarEnv} \times \mathrm{IndexEnv} \to \mathrm{Value} \simeq \mathrm{VarEnv} \to  [\iota]  \to \mathrm{Array}_{|\iota|}\, \mathrm{Value} } $$
+We took the jump from pointful \textit{(given an assignment to each index, compute $\tau$...)} to point-free style \textit{(using an array representation of values $\tau$ at each possible index...)}. \textbf{Axials} are the encoding of $[\iota] \times \mathrm{Array}_{|\iota|}\, \mathrm{Value}$. They encapsulate the connection on the point-free side, fixing the \textit{axes} (the $[\iota]$ part of the construction).
+
+\paragraph{Definition} We now define axials as a type constructor $\mathrm{Axial}\,\tau$ of a record type:
+$$ \mathrm{Axial}\,\tau \equiv \{ \mathrm{axes} : \mathrm{List}\,\mathrm{Index}, \mathrm{sizes} : \mathrm{Map}\,\mathrm{Index}\,\mathbb N, \mathrm{values} : \mathrm{Array}\,\tau \} $$
+For an axial to be well-formed, the axes must be a permutation of the keys in the sizes map. We shall also assume that for each index, there exist one size consistently associated with it.\footnote{To see why this is reasonable, recall that in Phi indices are only bound at array comprehensions and exactly one size is assigned to them at that point.} The point of an axial is to model values dependent on some axes (corresponding to indices $i, j, \dots$ in Phi).
+
+To prove that this structure is \textit{natural} (and hence well-behaved), we show that axials form an applicative functor. To this end, we need to define $\mathrm{pure}$ and $\mathrm{lift}_2$. $\mathrm{pure} : \alpha \to \mathrm{Axial}\,\alpha$ is simple enough:
+$$ \mathrm{pure}\,x = \{ \mathrm{axes} = \varnothing, \mathrm{sizes} = \varnothing, \mathrm{values} = \mathrm{Array.scalar}\,x \} $$
+However, $\mathrm{lift}_2 : (\alpha \to \beta \to \gamma) \to (\mathrm{Axial}\,\alpha \to \mathrm{Axial}\,\beta \to \mathrm{Axial}\,\gamma)$ is a bit trickier. Consider $\mathrm{lift}_2\,f\,a\,b$. What we \textit{really} want to compute is an array that for each index $i$ has the value $f\,a[i]\,b[i]$ -- a generalisation of a map operation. The tricky part is the hidden complexity of axes in this notation -- the index spaces are all different. We need to reconcile the axes of $a$ and $b$, and produce a unified list of axes.
+
+Interestingly, there is not a unique way of doing this reconciliation. In fact, we are only constrained by the fact that the unified axes must be a permutation of the set of existing axes (of $a$ and $b$). To this end, suppose we have a function $\mathrm{mergeAxes}$ that merges two lists of axes, but keeping at most one occurrence of each index. Secondly, we need a way of translating from the new index space into one of $a$ and $b$ -- we do not elaborate on this, as it's a bit different in the compilation scheme itself than in general. 
+
+Armed with a way to determine the unified axes, and a way to map between the new and old index spaces, we can finally write:\footnote{This is abuse of notation to a certain degree, as there is some more work to do. $\mathrm{Array}$ is assumed to be multi-dimensional, and each index $i$ is a list of coordinates. We take $\mathrm{sizes}$ to agree in order with $\mathrm{axes}$. For simplicity, we write $a[i]$ for indexing the values of $a$, translating the index $i$ from the unified axes into axes of $a$.}
+\begin{align*} 
+&\mathrm{lift}_2\,f\,a\,b = \{ \\
+&\quad \mathrm{axes} = \mathrm{mergeAxes}\,(\mathrm{axes}\,a)\,(\mathrm{axes}\,b), \\
+&\quad \mathrm{sizes} = \mathrm{sizes}\,a \cup \mathrm{sizes}\,b, \\
+&\quad \mathrm{values} = \mathrm{Array.init}\,\mathrm{sizes}\,(\lambda i \ldotp f\, a[i]\, b[i]) \\
+&\}
+\end{align*}
+It can be verified that these definitions satisfy the applicative laws, completing the construction of axials.
+
+\paragraph{Examples} Take $\mathrm{mergeAxes}\,x\,y = \mathrm{sort}\,(\mathrm{concat}\,x\,y)$. \\ Set $a = \{ [i, j], \{i \mapsto 2, j \mapsto 3 \}, [[0, 1, 2], [3, 4, 5]] \} $, $b = \{ [j, k], \{ j \mapsto 3, k \mapsto 1 \}, [[0], [-1], [-2]] \}$. Then:
+$$ d = \mathrm{lift}_2\,(+)\,a\,b = \{ [i,j,k], \{i \mapsto 2, j \mapsto 3, k \mapsto 1 \}, [[[0], [0], [0]], [[3], [3], [3]]] \} $$
+Similarly, set $c = \{ [j, i], \{ j \mapsto 3, i \mapsto 2 \}, [[0, -2], [1, -1], [2, 0]] \}$, in which case:
+$$ e = \mathrm{lift}_2\,(-)\,a\,c = \{ [i, j], \{i \mapsto 2, j \mapsto 3 \}, [[0, 0, 0], [5, 5, 5]] \} $$
+Note that $e[i, j] = a[i, j] - b[j, i]$, hence $e[1, 2] = a[1, 2] - b[2, 1] = 5 - 0 = 5$. 
+
+It is helpful to consider the examples in the context of Phi. In the first, $d$ is evaluating the outer $+$ in $$\phivec{i}{3}{\phivec{j}{2}{\phivec{k}{1}{(3 \cdot i + j) + (j + k)}}}$$ in terms of the sub-expressions $3 \cdot i + j$ and $j + k$ (with axials $a$ and $b$ resp.). In the second one, $e$ is computing the result of the subtraction in 
+$$\phivec{i}{2}{\phivec{j}{3}{(3 \cdot i + j) - \mathrm{where}(i = 0, j, 2 - j)}}$$ again in terms of the subexpressions. $e[1, 2]$ corresponds to the substitution $\{ i \mapsto 1, j \mapsto 2 \}$:
+$$ e[1, 2] = (3 \cdot 1 + 2) - \mathrm{where}(1 = 0, 2, 2 - 2) = 5 - \mathrm{where}(\bot, 2, 0) = 5 - 0 = 5 $$
+
+\paragraph{Context} Why are axials useful in relating different styles of array programming? Crucially, instances of $\mathrm{lift}_2$ are essentially just uses of NumPy-style \textbf{broadcasting} with the necessary shape manipulation performed by way of translating the index spaces. In some ways, axials can be seen as a generalisation of arrays. Instead of having positional axes, we have a notion of \textit{labelled axes}. This is reminiscent of \textit{named tensors} which have been gaining traction recently \cite{chiang2022named}. Nonetheless, in-memory representation requires us to pick the axis ordering. Axials abstract over this process through $\mathrm{mergeAxes}$. Further optimisations and heuristics could be applied on the in-memory axis ordering.
+
+Let us consider how axials relate to some other applicative functors. In fact, they turn out to have nice connections to both the $\mathrm{List}$ and $\mathrm{ZipList}$ applicatives. So far, we did not specify what the $\mathrm{Index}$ type is, besides taking it to have a notion of equality. It turns out that if we take $\mathrm{Index} \equiv \mathrm{Unit}$, then axials become the $\mathrm{ZipList}$ applicative. Any $\mathrm{List}\,\alpha$ can be straightforwardly converted to a list with the single axis, and $\mathrm{lift}_2\,f\,a\,b$ applies $f$ to respective pairs of elements in $a$ and $b$.
+On the other hand, when $\mathrm{Index} \equiv \mathrm{Bool}$, then we obtain the $\mathrm{List}$ applicative. To complete the construction, any application of $\mathrm{lift}_2$ needs to take the first operand list along axis $\bot$, and the other operand along $\top$. The produced axial has both axes $\{ \bot, \top \}$, which we can convert back to a list by flattening its values.
+
+
+\subsection{Compilation scheme}
+
+By ``reinterpreting'' Phi programs with axials -- via a process we call \textit{lifting} -- we are able to give a simple compilation scheme from Phi into the array calculus. Lifting is a standard functional programming technique, but we use it in the context of a compilation scheme. 
 
 \todothis
 
 % Compilation contract
-
-\subsection{Optimisations}
-
-\todothis
 
 \section{Runtime -- Execution backends}
 \label{execution-backend}
 
 The compilation target of Ein is a high-level library in the array programming model. This means that most of the work is spent in relatively expensive whole-array operations, which dominates many overheads associated with an interpreter written in Python. As such, we can take liberties to simplify the implementation. The primary technique we use to form an execution backend is \textit{staging}. In essence, we implement a function of the form
 $$ \mathrm{Expr} \to \left( \mathrm{Env} \to \mathrm{Value} \right) $$
-where $\mathrm{Expr}$ is an expression in Phi or array calculus, and $\mathrm{Env}$ is a mapping from variables to assigned values. This essentially corresponds to directly implementing the denotational semantics $\llbracket e \rrbracket : \mathrm{Env} \to \mathrm{Value}$ of the two calculi, where we implement the denotations as Python closures.
+where $\mathrm{Expr}$ is an expression in Phi or array calculus, and $\mathrm{Env}$ is a mapping from variables to assigned values. This essentially corresponds to directly implementing the denotational semantics $\llbracket - \rrbracket : \mathrm{Env} \to \mathrm{Value}$ of the two calculi. We represent the denotations with Python closures.
 
 \subsection{Naive}
 
@@ -378,7 +495,7 @@ We follow the same denotation-guided staging approach as in the naive backend. T
 
 Ein's let-bindings enjoy more efficient memory management than a manually-written NumPy program. In typical programs, new arrays are allocated sequentially with no explicit deallocations. Usually, memory can only be freed by the garbage collector at the end of a function's execution. With let bindings we achieve a higher granularity -- arrays can be freed as soon as they are no longer used, without user intervention.
 
-\paragraph{Eliminating temporaries} Where they cannot return a view, NumPy operations allocate fresh memory for the result by default. Operations can be made in-place instead, but idiomatic NumPy programs are inconvenient to write in this style. Consider adding three vectors \texttt{(a, b, c)}. The computation \texttt{a + b + c} will allocate memory for both the temporary \texttt{a + b} and the result of \texttt{(a + b) + c}. If we know the former of these will not be reused (which is easy to determine in an AST), we can reuse its memory. In practice, one would write:
+\paragraph{Eliminating temporaries} Where they cannot return a view, NumPy operations allocate fresh memory for the result by default. Operations can be made in-place instead, but idiomatic NumPy programs are inconvenient to write in this style. Consider adding three vectors \texttt{(a, b, c)}. The computation \texttt{a + b + c} will allocate memory for both the temporary \texttt{a + b} and the result of \texttt{(a + b) + c}. If we know the former of these will not be reused (which is easy to determine in the AST representation), we can reuse its memory. A NumPy programmer would write this operation as:
 \begin{center}
 \begin{cminted}{python}
 t = numpy.add(a, b)     # Allocate t = a + b
@@ -389,7 +506,7 @@ Ein's NumPy backend performs this in-place update optimisation automatically, wh
 
 \subsection{Generalising the NumPy backend}
 
-\paragraph{Motivation} The very same methods as in the NumPy can be used in other array programming frameworks -- such as PyTorch, TensorFlow, and Jax. This is because they all derive from NumPy, as explained in the Preparation. A PyTorch backend was implemented as an extension to test this in practice. PyTorch allows efficient execution on GPUs and other hardware accelerators. It features a set of well-optimised \textit{kernels}. This project does not explore the application of accelerators in detail. However, it is critical to stress the simplicity with which the CPU-oriented NumPy backend is generalised. Existing frameworks already implement hundreds of thousands of lines of code to effectively use accelerators. Ein can take advantage of this directly.
+\paragraph{Motivation} The very same methods as in the NumPy can be used in other array programming frameworks -- such as PyTorch, TensorFlow, and Jax. This is because they all derive from NumPy, as explained in the Preparation chapter. A PyTorch backend was implemented as an extension to test this in practice. PyTorch allows efficient execution on GPUs and other hardware accelerators. It features a set of well-optimised \textit{kernels}. This project does not explore the application of accelerators in detail. However, it is critical to stress the simplicity with which the CPU-oriented NumPy backend is generalised. Existing frameworks already implement hundreds of thousands of lines of code to effectively use accelerators. Ein can take advantage of this directly.
 
 \paragraph{Automatic differentation} A feature common to all deep learning frameworks is the capability of performing \textit{automatic differentiation} (AD). Notably, we do not implement it directly in Ein. This choice is motivated by AD's availability in Ein's potential backends. Indeed, to differentiate an Ein function, we may use the PyTorch backend and make use of its existing facilities. In the following we compute $\frac{\partial \mathbf{a}^T \mathbf{b}}{\partial \mathbf{a}} = \mathbf{b}$:
 \begin{center}
@@ -405,11 +522,11 @@ return a.grad  # == b
 \end{cminted}
 \end{center}
 
-\paragraph{Abstract backend} To facilitate addition of new backends, the \texttt{AbstractArrayBackend} base class was implemented. A staging function may be derived from an instance of this interface. Both the NumPy and PyTorch backends actually implement this same interface. Nearly no extra glue code is necessary, as it is only necessary to translate Ein's array calculus to the corresponding API calls.
+\paragraph{Abstract backend} To facilitate addition of new backends, the \texttt{AbstractArrayBackend} base class was implemented. A staging function may be derived from an instance of this interface. Both the NumPy and PyTorch backends actually implement this same interface. Nearly no glue code is necessary, as it is only necessary to translate Ein's array calculus to the corresponding API calls.
 
 \subsection{Extrinsics}
 
-There are cases where Ein's compiler does not directly allow or generate calls to functions available in the backend. For instance, there is no way to call \texttt{numpy.sort} directly in Ein. To this end, \textit{extrinsics} were implemented to facilitate calls to backend-specific functions. This is facilitated with the \texttt{ext} primitive, which takes a Python function and a type signature to use with Ein's type checking. Extrinsics allow nearly-seamless integration of Ein and custom code, which vastly improves flexibility. In the below example, we sort an Ein \mintinline{python}{Vec[float]} using \texttt{numpy.sort} (the \texttt{sort} wrapper is used unnecessary, and used for clarity):
+There are cases where Ein's compiler does not directly allow or generate calls to functions available in the backend. For instance, there is no way to call \texttt{numpy.sort} directly in Ein. To this end, \textit{extrinsics} were implemented to facilitate calls to backend-specific functions. This is facilitated with the \texttt{ext} primitive, which takes a Python function and a type signature to use with Ein's type checking. Extrinsics allow nearly-seamless integration of Ein and custom code, which vastly improves flexibility. In the below example, we sort an Ein \mintinline{python}{Vec[float]} using \texttt{numpy.sort} (the \texttt{sort} wrapper is unnecessary, but used for clarity):
 \begin{center}
 \begin{cminted}{python}    
 def sort(x: Vec[float]) -> Vec[float]:

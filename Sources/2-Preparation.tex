@@ -197,7 +197,7 @@ The practice of creating domain-specific languages (DSLs) has a long history \ci
 
 \subsection{Embeddings}
 
-A domain-specific language can be standalone, in which case it functions as an independent language with limited capabilities. One could see the YAML serialisation language to be an example of such a DSL. However, a refined approach is \textbf{embedding} a DSL in a host language. Furthermore, we distinguish two kinds of embeddings \cite{gibbons2014folding}. Firstly, we have \textit{deep} embeddings, where the DSL is executed by traversing the syntax tree of a program written in the host language. Otherwise the embedding is \textit{shallow}, in which case the semantics of the host syntax are preserved, and programs are executed directly. We focus on shallow-embedded DSLs that work on the basis of term constructors -- they build up programs in the DSL, and later execute them. Examples of both style of embeddings are given in 
+A domain-specific language can be standalone, in which case it functions as an independent language with limited capabilities. One could see the YAML serialisation language to be an example of such a DSL. However, a refined approach is \textbf{embedding} a DSL in a host language. Furthermore, we distinguish two kinds of embeddings \cite{gibbons2014folding}. Firstly, we have \textit{deep} embeddings, where the DSL is executed by traversing the syntax tree of a program written in the host language. Otherwise the embedding is \textit{shallow}, in which case the semantics of the host syntax are preserved, and programs are executed directly. We focus on shallow-embedded DSLs that work on the basis of term constructors -- they build up programs in the DSL, and later execute them. Examples of both style of embeddings are given in Figure \ref{fig:embeddings}.
 
 \begin{figure}[h]
 \centering
@@ -212,7 +212,7 @@ def foo(x, y):
   return z
 
     \end{cminted}
-      \caption{Deep embedded DSL (TensorFlow). Code is not executed, \mintinline{python}{@function} computes a dataflow graph instead. Less explicit.}
+      \caption{Deep-embedded DSL (TensorFlow). Python code is not executed, the \mintinline{python}{@function} decorator calculates a dataflow graph instead.}
 \end{subfigure} \quad %
 \begin{subfigure}{.4\textwidth}
   \centering
@@ -225,10 +225,10 @@ def foo(x, y):
     y
   )
   \end{cminted}
-  \caption{Shallow-embedding (Jax). The code is executed with tracing. The \texttt{cond} function is used, as \mintinline{python}{if} normally only works for Python \mintinline{python}{bool}s.}
+  \caption{Shallow-embedded DSL (Jax). The code is executed with tracing. The \texttt{cond} function is used, as \mintinline{python}{if} normally only works for Python \mintinline{python}{bool}s.}
 \end{subfigure}
 \caption{Domain-specific language embedding}
-\label{fig:point-arrays}
+\label{fig:embeddings}
 \end{figure}
 
 Generally, shallow-embedded DSLs are much easier to integrate with existing codebases and features of the host language.
