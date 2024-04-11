@@ -8,19 +8,19 @@ APL's ideas certainly stood the test of time in its various implementations and 
 
 When I found myself in a research team working on generalisation of deep learning models, I was shocked to see novel model architectures attract Python implementations as troublesome as \href{https://github.com/google-deepmind/clrs/blob/8697f51663bd77548f4b3108816c84d163883361/clrs/_src/processors.py#L140}{this one}, which I paraphrase below in the style of \textit{NumPy:}
 % FIXME: Currently, the snippet defines logits and values, but does not use the former. Also fix in Ein.
-\begin{center} \begin{minipage}{0.65\textwidth}
-\begin{minted}{python}
+\begin{center}
+\begin{cminted}{python}
+att_1 = expand_dims(att_1, axis=-1)
+att_2 = expand_dims(att_2, axis=-1)
+att_g = expand_dims(att_g, axis=-1)
 logits = (
     transpose(att_1, (0, 2, 1, 3)) +  # + [B, H, N, 1]
     transpose(att_2, (0, 2, 3, 1)) +  # + [B, H, 1, N]
     transpose(att_e, (0, 3, 1, 2)) +  # + [B, H, N, N]
-    expand_dims(att_g, axis=[-1, -2]) # + [B, H, 1, 1]
+    expand_dims(att_g, axis=-1)       # + [B, H, 1, 1]
 )                                     # = [B, H, N, N]
-values = transpose(values, (0, 2, 1, 3))  # [B, H, N, F]
-ret = matmul(c, values)  # [B, H, N, F]
-return transpose(ret, (0, 2, 1, 3))  # [B, N, H, F]
-\end{minted}
-\end{minipage} \end{center}
+\end{cminted}
+\end{center}
 Problems found in this snippet are not uncommon in the domain. The code was difficult to write and is not much easier to read, there are plenty of cryptic parameters that are \textit{probably correct}, and it was necessary to add comments. These issues can be attributed to a failure of the underlying paradigm -- the array programming model. \textcite{paszke2021getting} argue why the model might not be an apt abstraction for modern workflows. Though there are certainly benefits, such as the abundant parallelism present and usually good behaviour under automatic differentiation, there are also shortcomings. In short, the notation is often too explicit while also being too unconstrained, leading to code unreadable by both humans and machines. 
 
 Matters get worse when one realises the deep learning ecosystem is extremely centralised -- nearly all research and a significant part of engineering takes place in Python in a select few libraries. Examples include PyTorch, TensorFlow, Jax, and they turn out to all derive from the aforementioned NumPy, which embraces the array programming model. 
@@ -42,18 +42,13 @@ The main aim of the project is to design and implement a domain-specific languag
     \item Since Python is such an important aspect of the target domain, the finished product needs to be easy-to-use in it. Attention should be paid to practicality and a good programmer experience.
     \item Due to the significant effort needed to produce efficient array code targeting all kinds of hardware, the compiler should capitalise on existing efforts in established projects to achieve this universality.
 \end{itemize}
-Based on these criteria, I chose to shallow-embed a new pointful array language in Python, and to compile it to calls in the NumPy library in a fashion that is easy to generalise to similar targets. 
+Based on these criteria, I chose to embed a new pointful array language in Python, and to compile it to calls in the NumPy library in a fashion that is easy to generalise to similar targets. 
 
 \paragraph{Foreshadowing} The motivating example translates to the following code in my new language:
 \begin{center}
 \begin{cminted}{python}
 logits = array(
     lambda b, h, u, v: s[b, u, h] + t[b, v, h] + e[b, u, v, h] + g[b, h]
-)
-return array(
-    lambda b, u, h, f: reduce_sum(
-        lambda v: c[b, h, u, v] * values[b, v, h, f]
-    )
 )
 \end{cminted}
 \end{center}

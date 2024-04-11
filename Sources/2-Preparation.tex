@@ -106,7 +106,7 @@ Unfortunately, static typing is notoriously difficult in the array programming m
 \section{Pointful array programming}
 \label{pointful-array-programming}
 
-In functional programming, one can distinguish a \textbf{pointful} style and contrast it with the \textbf{point-free} (tacit, or ``pointless'') one. This distinction essentially considers whether data flow is given by variable names, or driven with combinators. A classical theoretical example is that of $\lambda$ and SKI calculi, which are respectively pointful and point-free. Both have the same expressive power, but it is known that compiling $\lambda$ to SKI \textit{(bracket abstraction)} incurs an overhead, which is dependent on the expressiveness of the combinators \cite{lachowski2018complexity}. 
+In functional programming, one can distinguish \textbf{pointful} and \textbf{point-free} (tacit, or ``pointless'') styles -- see examples in Figure \ref{fig:point-haskell}. This distinction essentially considers whether data flow is given by variable names, or driven with combinators. A classical example is that of $\lambda$ and SKI calculi, which are respectively pointful and point-free. Both have the same expressive power, but it is known that compiling $\lambda$ to SKI \textit{(bracket abstraction)} incurs an overhead, which is dependent on the expressiveness of the combinators \cite{lachowski2018complexity}. 
 In essence, one can view the main result of this work as \textbf{bracket abstraction for array programs}.
 
 \begin{figure}[h]
@@ -130,8 +130,11 @@ sum (x:xs) = x + sum xs
 \label{fig:point-haskell}
 \end{figure}
 
-In the context of this work we draw a similar distinction in array programming as \textcite{paszke2021getting} -- the array programming model is \textit{point-free}, because we reason on whole arrays and stylistically do not operate on individual indices. In contrast, \textit{pointful} (or \textit{index-oriented}) array programming allows us to reason about arrays as functions, where each element is defined in terms of its index. This pushes indexing operations to the forefront and, at the very least, brings us closer to \textbf{mathematical 
-notation} -- as per Iverson.
+In the context of this work we draw a similar distinction in array programming (following \textcite{paszke2021getting}).
+The array programming model is \textit{point-free}, because we reason about operations on whole arrays at a time, and not individual elements. 
+In contrast, \textit{pointful} (or \textit{index-oriented}) array programming allows us to think about elements per-index. 
+This pushes indexing operations to the forefront and, at the very least, brings us closer to \textbf{mathematical notation} -- as per Iverson.
+In particular, it becomes useful to think about arrays as functions, where each element is defined in terms of its index. 
 
 \begin{figure}[h]
 \centering
@@ -197,23 +200,18 @@ The practice of creating domain-specific languages (DSLs) has a long history \ci
 
 \subsection{Embeddings}
 
-A domain-specific language can be standalone, in which case it functions as an independent language with limited capabilities. One could see the YAML serialisation language to be an example of such a DSL. However, a refined approach is \textbf{embedding} a DSL in a host language. Furthermore, we distinguish two kinds of embeddings \cite{gibbons2014folding}. Firstly, we have \textit{deep} embeddings, where the DSL is executed by traversing the syntax tree of a program written in the host language. Otherwise the embedding is \textit{shallow}, in which case the semantics of the host syntax are preserved, and programs are executed directly. We focus on shallow-embedded DSLs that work on the basis of term constructors -- they build up programs in the DSL, and later execute them. Examples of both style of embeddings are given in Figure \ref{fig:embeddings}.
+A domain-specific language can be standalone, in which case it functions as an independent language with limited capabilities. 
+However, a refined approach is \textbf{embedding} a DSL in a host language. 
+% Furthermore, . 
+% Firstly, we have \textit{deep} embeddings, where the DSL is executed by traversing the syntax tree of a program written in the host language. 
+% Otherwise the embedding is \textit{shallow}, in which case the semantics of the host syntax are preserved, and programs are executed directly. 
+In this project we focus on \textit{deep-embedded}\footnote{We further distinguish \textit{shallow embeddings}, which do not build up an intermediate representation of the program \cite{gibbons2014folding} and hence cannot take advantage of domain-specific whole-program optimisations. In the context of Python, one can see PyTorch as an example.} DSLs that work on the basis of term constructors -- they build up programs in the DSL, and later execute them. 
+In the context of Python, some DSLs directly inspect the program's AST instead of executing the code. 
+This style is inferior, as it is less predictable and cannot make use of Python's language features (as they need to be specifically supported by the DSL). 
+We compare the deep-embedding in Jax and TensorFlow's AST-based embedding in Figure \ref{fig:embeddings}.
 
-\begin{figure}[h]
+\begin{figure}
 \centering
-\begin{subfigure}{.4\textwidth}
-  \centering
-    \begin{cminted}{python}
-
-@function
-def foo(x, y):
-  if x > 0: z = y+1
-  else:     z = y-1
-  return z
-
-    \end{cminted}
-      \caption{Deep-embedded DSL (TensorFlow). Python code is not executed, the \mintinline{python}{@function} decorator calculates a dataflow graph instead.}
-\end{subfigure} \quad %
 \begin{subfigure}{.4\textwidth}
   \centering
   \begin{cminted}{python}
@@ -225,19 +223,32 @@ def foo(x, y):
     y
   )
   \end{cminted}
-  \caption{Shallow-embedded DSL (Jax). The code is executed with tracing. The \texttt{cond} function is used, as \mintinline{python}{if} normally only works for Python \mintinline{python}{bool}s.}
+  \caption{Deep-embedded DSL (Jax). The code is executed with tracing. The \texttt{cond} function is used, as \mintinline{python}{if} normally only works for Python \mintinline{python}{bool}s.}
+\end{subfigure} \quad %
+\begin{subfigure}{.4\textwidth}
+  \centering
+    \begin{cminted}{python}
+
+@function
+def foo(x, y):
+  if x > 0: z = y+1
+  else:     z = y-1
+  return z
+
+    \end{cminted}
+      \caption{AST-based embedded DSL (TensorFlow). Python code is not executed, the \mintinline{python}{@function} decorator calculates a dataflow graph instead.}
 \end{subfigure}
 \caption{Domain-specific language embedding}
 \label{fig:embeddings}
 \end{figure}
 
-Generally, shallow-embedded DSLs are much easier to integrate with existing codebases and features of the host language.
+Generally, embedded DSLs are much easier to integrate with existing codebases and features of the host language.
 Such DSL programs are essentially values, and hence the host language programmer can apply metaprogramming techniques to transform them \cite{atkey2009unembedding}. 
-A special case of a deep-embedding is a \textit{stringly-typed} DSL, meaning that programs are expressed in (preferably short) strings, which are parsed at runtime. An example in the scope of this work is the aforementioned \texttt{einops} Python library, but similarly one could see many regular expression interfaces as stringly-typed. The problematic reality of such embeddings is that they are extremely difficult to generalise beyond a small, elegant core.
+A special case of a deep-embedding is a \textit{stringly-typed} DSL, meaning that programs are expressed in (preferably short) strings, which are parsed at runtime. An example in the scope of this work is the aforementioned \texttt{einops} Python library, but similarly one could see many regular expression interfaces as stringly-typed. The problematic reality of such embeddings is that they are extremely difficult to generalise beyond a small core.
 
 \subsubsection{Tracing} \label{tracing}
 
-In the context of Python, a common approach to creating shallow-embedded DSLs is \textbf{tracing}. It has found use in the Jax framework \cite{frostig2018compiling}. A DSL program is enclosed by a function in the host language, and to compile a program the function is \textit{traced} by calling it with placeholder (symbolic) arguments, representing the variable inputs. Computations are performed \textit{lazily} on these arguments -- no work is done immediately, and instead a computational graph is constructed. Once the function returns, this graph is captured and the represented program can be further compiled and executed.
+In the context of Python, a common approach to creating deep-embedded DSLs is \textbf{tracing}. It has found use in the Jax framework \cite{frostig2018compiling}. A DSL program is enclosed by a function in the host language, and to compile a program the function is \textit{traced} by calling it with placeholder (symbolic) arguments, representing the variable inputs. Computations are performed \textit{lazily} on these arguments -- no work is done immediately, and instead a computational graph is constructed. Once the function returns, this graph is captured and the represented program can be further compiled and executed.
 
 \begin{figure}[ht]
     \centering
@@ -395,6 +406,7 @@ There were many possible variations on any of these points, so best judgements w
 Owing to the modularity of the project and relatively orthogonal extensions, the \textit{spiral model} of development was adopted. After the initial milestones for each of the core deliverables (calculus, front-end, back-end), further ones focused on extensions. Priority was assigned based on impact on success criteria and practical usage, as well as efficiency of further work. Risk assessment relied on the existence of implementations or descriptions of a feature in the literature. Debug tooling for inspecting intermediate outputs is useful for debugging (particularly for a compiler), and as such it was also given priority.
 
 \subsection{Review of array programs}
+\label{suite-review}
 
 Array programs vary significantly depending on the domain. One of these differences is in what language features are necessary to express them. For instance, deep learning programs rarely feature control flow, while differential equation solvers might perform iterated stencil computations. Even though application in deep learning is the original motivation, developing a more general calculus was preferable.
 

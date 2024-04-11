@@ -2,25 +2,16 @@
 
 We consider this project to be the implementation of a compiler for a domain-specific language. Throughout this chapter, we follow compiler phases from the frontend to the backend. 
 \begin{itemize}
-    \item We first introduce the \textit{Phi calculus}, which formalises the pointful array programs we can compile (Section \ref{phi-calculus}). We give a syntax, type system, and briefly describe its semantics.
-    \item In Section \ref{ein-dsl} we showcase the domain-specific language itself, which is called \textit{\textbf{Ein}}. We describe its shallow-embedding in Python. Since we use an embedding, we do not need a classical parser.
-    \item Ein constructs Phi programs, on which we can perform analyses and transformations. We describe the most important of these in Sections \ref{compiler-analyses} and \ref{compiler-transformations} respectively.
-    \item A key contribution of this work is the compilation scheme, which allows us to ``escape the pointless'' (Section \ref{escaping-the-pointless}). We compile the Phi calculus to the array programming model, which we formalise as the \textit{array calculus}. The \textit{Axial} applicative functor is introduced, which underlies the connection.
-    \item Once the program is represented in the array calculus is obtained, we use a runtime. We primarily use NumPy, but we also show the same approach works for a framework like PyTorch. We describe the approach and its caveats in Section \ref{execution-backend}.
+    \item We first introduce the \textit{Phi} pointful array calculus, which formalises our array programs (Section \ref{phi-calculus}). We consider its syntax, type system, and semantics.
+    \item In Section \ref{ein-dsl} we showcase the domain-specific language itself, which is called \textit{\textbf{Ein}}. We describe its deep-embedding in Python. Since we use an embedding, we do not need a classical parser. Ein's API builds up expressions in Phi, after which a complete program can be explicitly \textit{evaluated}.
+    \item To evaluate the program, we have to \textit{compile} it. We describe the most important analyses and transformations which form the Ein compiler's middle-end in Sections \ref{compiler-analyses} and \ref{compiler-transformations} respectively.
+    \item A key contribution of this work is novel \textit{code generation} scheme, which allows us to ``escape the pointless'' (Section \ref{escaping-the-pointless}). We generate programs in the array programming model represented in \textit{Yarr} -- our point-free array calculus. The \textit{Axial} applicative functor is introduced, underlying the connection between pointful and point-free array programming.
+    \item Once the program is represented in Yarr, we use an \textit{execution backend}. We primarily use NumPy, but we also show the same approach works for a framework like PyTorch. We describe the approach and its caveats in Section \ref{execution-backend}.
     \item We wrap up the chapter with a repository overview in Section \ref{repository-overview}.
 \end{itemize}
 Throughout this section code snippets are excerpts from executable Python using Ein. 
 
-% We describe the implementation from the front-end to the backend, describing the compilation pipeline:
-% \begin{itemize}
-%     \item Shallow-embedded domain-specific language --  \textit{Ein}
-%     \item Pointful array calculus, the terms of which are constructed by the \textit{Ein} front-end -- \textit{Phi}
-%     \item Pointless array calculus, constructed by way of compiling Phi -- \textit{Yarr}
-%     \item Newly introduced applicative that bridges pointful and point-free array programming -- \textit{Axial}
-%     \item Execution backends in NumPy and PyTorch
-% \end{itemize}
 
-% \section{Phi -- pointful calculus}
 \section{Theory -- Phi calculus}
 \label{phi-calculus}
 
@@ -31,7 +22,6 @@ We begin by introducing the \textbf{Phi calculus}, which is the theoretical basi
 \newcommand{\philet}[3]{\mathrm{let}\,{#1}={#2}\,\mathrm{in}\,{#3}}
 \newcommand{\phivec}[3]{\Phi\, {#1}[{#2}] \ldotp {#3}}
 \newcommand{\phifold}[5]{\mathrm{fold}\,{#1}[{#2}]\,\mathrm{over}\,{#3} = {#4}\,\mathrm{by}\,{#5}}
-% \newcommand{\phiif}[3]{\mathrm{if}\,{#1} \,\mathrm{then}\, {#2}\, \mathrm{else}\, {#3}}
 \newcommand{\phipair}[2]{\left\langle {#1}, {#2} \right\rangle}
 \newcommand{\phifst}[1]{\mathrm{fst}\,{#1}}
 \newcommand{\phisnd}[1]{\mathrm{snd}\,{#1}}
@@ -104,7 +94,7 @@ In Phi we opt to treat this as an implementation detail, but for simplicity stic
 
 \subsection{Embedding Phi in Python}
 
-We shallow-embed Phi in Python to allow constructing and validating terms in the frontend. Conceptually, we implement Phi's grammar as a sum type.\footnote{To implement this pattern in Python we use a sealed abstract base class with a child class for each case.} To construct the term $\phivec{i}{4}{\phivec{j}{4}{i \cdot j}}$, we write:
+We embed Phi in Python to allow constructing and validating terms in the frontend. Conceptually, we implement Phi's grammar as a sum type.\footnote{To implement this pattern in Python we use a sealed abstract base class with a child class for each case.} To construct the term $\phivec{i}{4}{\phivec{j}{4}{i \cdot j}}$, we write:
 \begin{center}
 \begin{cminted}{python}
 i, j = Index(), Index()
@@ -115,11 +105,10 @@ table = Vec(i, four, Vec(j, four, Multiply((At(i), At(j)))))
 Thanks to the simplicity of Phi's type system, we easily implement bottom-up type checking. To prevent the construction of invalid terms, constructors calculate a type based on the subterms. To facilitate this, we make use of intrinsically typed variables -- each variable atom has a \texttt{type} attribute set. Furthermore we do not use string-based names for variables or indices. Instead, we compare them for object identity, which is akin to using a \texttt{gensym}-like functionality.
 
 
-% \section{Ein -- shallow-embedded language}
 \section{Frontend -- Ein}
 \label{ein-dsl}
 
-\textbf{Ein} forms the programmer-accessible side of the project, and is implemented as the \texttt{ein} Python package. Unlike a traditional compiler, our frontend is not formed by a lexer or parser, but as a Python library functioning as a shallow-embedded DSL. We provide an overview of Ein's features and its design. 
+\textbf{Ein} forms the programmer-accessible side of the project, and is implemented as the \texttt{ein} Python package. Unlike a traditional compiler, our frontend is not formed by a lexer or parser, but as a Python library functioning as a deep-embedded DSL. We provide an overview of Ein's features and its design. 
 
 \subsection{Embedding}
 
