@@ -64,7 +64,6 @@ The main source of problems are the axis indices and permutations, which get har
 % A common practice is writing all programs with arrays possessing an extra \textit{batch} axis, which may be used to effectively \textit{map} (in a functional sense) the function over a vector of examples. Where this is unnecessary, an axis of size 1 is passed instead. 
 
 \paragraph{Reductions}
-
 One might notice operations we have considered so far cannot \textit{accumulate} data. Though the paradigm does not forbid simply looping in Python, the idiomatic approach is a \textit{reduction}. To compute a so-called tropical matrix product,\footnote{The tropical $(\min, +)$ algebra is useful in various shortest path problems on graphs.} we use \texttt{numpy.min}, parametrised by the index of the axis to reduce over:
 \begin{align*}
 &C[i, j] = \min_k A[i, k] + B[k, j] \\
@@ -279,7 +278,7 @@ One of the central structures introduced in this work (the Axial) is shown to be
 \end{align*}
 These operations must follow the \textit{applicative laws}, the exact formulation of which is out of scope. However, they can be seen in the light of \textit{homomorphisms} in a categorical sense, or just a notion of niceness under function composition. A definition upholding these laws shows the structure is in some way \textit{natural}. 
 
-In this work we use a slight variation of $\circledast$ (pronounced \textit{apply}), called $\mathrm{lift}$:
+In this work we use a slight variation of $\circledast$ (which is pronounced \textit{apply}), called $\mathrm{lift}$:
 \begin{align*}
 \mathrm{lift}_2& : (\alpha \to \beta \to \gamma) \to (f\,\alpha \to f\,\beta \to f\,\gamma) \\ 
 \mathrm{lift}_2&\,f\,a\,b = (f \circledast a) \circledast b
@@ -288,7 +287,7 @@ One further generalises $\mathrm{lift}$ to arbitrary numbers of function argumen
 
 Applicatives can be seen as an embellishment of values that permits application of similarly embellished transformations. Two examples of applicatives -- $\mathrm{List}$ and $\mathrm{ZipList}$ -- are shown on Figure \ref{fig:applicatives}.
 %
-\begin{figure}[h]
+\begin{figure}
 \centering
 \begin{subfigure}{.5\textwidth}
   \centering

@@ -25,7 +25,7 @@ Problems found in this snippet are not uncommon in the domain. The code was diff
 
 Matters get worse when one realises the deep learning ecosystem is extremely centralised -- nearly all research and a significant part of engineering takes place in Python in a select few libraries. Examples include PyTorch, TensorFlow, Jax, and they turn out to all derive from the aforementioned NumPy, which embraces the array programming model. 
 % Even attempts at interoperability like the ONNX standard end up using the same paradigm, preserving the status quo \cite{jin2020compiling}. 
-This makes implementing high-performance compilers unexpectedly hard, leading to the introduction of different intermediate representations, posing challenges in translation to different paradigms \cite{feng2023tensorir}. The deep learning ecosystem is also constantly evolving, with new operations and hardware targets constantly developed, making for a colossal engineering effort in any single project. This slows down development of any new practical approaches.
+This makes implementing high-performance compilers unexpectedly hard, leading to the introduction of different intermediate representations \cite{feng2023tensorir}, posing challenges in translation to their different paradigms. The deep learning ecosystem is also constantly evolving, with new operations and hardware targets constantly developed. This makes for a colossal engineering effort in any single array compiler project, slowing down development of new practical approaches.
 
 \section{Prior art}
 
@@ -39,7 +39,7 @@ Issues of the array programming model have not gone unnoticed in the Python comm
 The main aim of the project is to design and implement a domain-specific language that pragmatically addresses problems of the array programming model, particularly in deep learning. This meant that:
 \begin{itemize}
     \item The designed language needs to show improvement of notation on a selection of problems. It should be general enough to avoid awkward code switching and build on a formal foundation. There is a tool for every problem, and so we improve on the array programming model where it falls short. 
-    \item Since Python is such an important aspect of the target domain, the finished product needs to be easy-to-use in it. Attention should be paid to practicality and a good programmer experience.
+    \item Since Python is such an important aspect of the target domain, the deliverable needs to be easily integrated with it. Attention should be paid to practicality and flexibility.
     \item Due to the significant effort needed to produce efficient array code targeting all kinds of hardware, the compiler should capitalise on existing efforts in established projects to achieve this universality.
 \end{itemize}
 Based on these criteria, I chose to embed a new pointful array language in Python, and to compile it to calls in the NumPy library in a fashion that is easy to generalise to similar targets. 
@@ -52,4 +52,4 @@ logits = array(
 )
 \end{cminted}
 \end{center}
-The code became much closer to an index-oriented mathematical notation. All of the cryptic transpositions are gone, and the nature of the matrix multiplication became evident. Most importantly of all -- this alternative approach executes just as fast as the original, while being much more readable.
+The code became much closer to an index-oriented mathematical notation. The cryptic transpositions are gone. Most importantly -- this alternative implementation executes just as fast as the original, while being much more readable.

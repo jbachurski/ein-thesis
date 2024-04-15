@@ -2,11 +2,11 @@
 
 We consider this project to be the implementation of a compiler for a domain-specific language. Throughout this chapter, we follow compiler phases from the frontend to the backend. 
 \begin{itemize}
-    \item We first introduce the \textit{Phi} pointful array calculus, which formalises our array programs (Section \ref{phi-calculus}). We consider its syntax, type system, and semantics.
-    \item In Section \ref{ein-dsl} we showcase the domain-specific language itself, which is called \textit{\textbf{Ein}}. We describe its deep-embedding in Python. Since we use an embedding, we do not need a classical parser. Ein's API builds up expressions in Phi, after which a complete program can be explicitly \textit{evaluated}.
+    \item We first introduce the \textit{Phi calculus}, which formalises pointful array programs (Section \ref{phi-calculus}). We consider its syntax, type system, and semantics.
+    \item In Section \ref{ein-dsl} we showcase the domain-specific language itself -- \textit{\textbf{Ein}}. We describe its deep-embedding in Python. Since we use an embedding, we do not need a classical parser. Ein's API builds up expressions in Phi, after which a complete program can be explicitly \textit{evaluated}.
     \item To evaluate the program, we have to \textit{compile} it. We describe the most important analyses and transformations which form the Ein compiler's middle-end in Sections \ref{compiler-analyses} and \ref{compiler-transformations} respectively.
-    \item A key contribution of this work is novel \textit{code generation} scheme, which allows us to ``escape the pointless'' (Section \ref{escaping-the-pointless}). We generate programs in the array programming model represented in \textit{Yarr} -- our point-free array calculus. The \textit{Axial} applicative functor is introduced, underlying the connection between pointful and point-free array programming.
-    \item Once the program is represented in Yarr, we use an \textit{execution backend}. We primarily use NumPy, but we also show the same approach works for a framework like PyTorch. We describe the approach and its caveats in Section \ref{execution-backend}.
+    \item A key contribution of this work is the novel \textit{code generation} scheme, which allows us to ``escape the pointless'' (Section \ref{escaping-the-pointless}). We define our compilation target for programs in the array programming model -- \textit{Yarr}, our point-free array calculus. The \textit{Axial} applicative functor is introduced, underlying the connection between pointful and point-free array programming in terms of Phi and Yarr.
+    \item Once the program is represented in Yarr, we interpret it through an \textit{execution backend}. We primarily use NumPy, but we also show our approach is general enough to also work for an established framework like PyTorch (Section \ref{execution-backend}).
     \item We wrap up the chapter with a repository overview in Section \ref{repository-overview}.
 \end{itemize}
 Throughout this section code snippets are excerpts from executable Python using Ein. 
@@ -184,7 +184,7 @@ In contrast, most renditions of the array programming model struggle to achieve 
 
 \subsection{Value system}
 
-We can now summarise the crux of Ein's value system:
+We can now summarise the crux of Ein's \textit{value system}:
 \begin{align*}
 v \quad::=&\quad 
 \text{\mintinline{python}{Scalar}}
@@ -193,7 +193,7 @@ v \quad::=&\quad
 \text{\mintinline{python}{Vec}}[v]
 & \text{(vectors)} \\
 \mid&\quad
-\text{\mintinline{python}{dict}}[\text{\mintinline{python}{str}}, v] \,\mid\, \text{\mintinline{python}{tuple}}[v, \dots] \,\mid\, \texttt{Dataclass}
+\text{\mintinline{python}{dict}}[\text{\mintinline{python}{str}}, v] \,\mid\, \text{\mintinline{python}{tuple}}[v, \dots] \,\mid\, \texttt{Dataclass}_v
 & \text{(records)}
 \end{align*}
 While only \texttt{Scalar} and \texttt{Vec} are classes implemented by Ein, the values $v$ can be used in Ein's primitives and are closed under them. We also do some implicit casting (e.g. \mintinline{python}{float} into \texttt{Scalar}).
@@ -242,50 +242,52 @@ We now describe the main analyses applied on Phi calculus, which facilitate furt
 
 \subsection{Normalisation of high-level operations}
 
-\begin{center}
-    \textcolor{red}{Not happy with how this looks right now. The notation is really messy, and the concept of what is opaque and what is in the normal form is left unclear.}
-\end{center}
+\todothis
+
+% \begin{center}
+%     \textcolor{red}{Not happy with how this looks right now. The notation is really messy, and the concept of what is opaque and what is in the normal form is left unclear.}
+% \end{center}
 
 % \textit{Declarative syntax matching on summation, minimisation, etc. defined by folds, which allows us to infer what high-level operations are applied (e.g. reductions). Similarly special indexing patterns; and tensor contractions -- matrix multiplication generalised to more dimensions.} \todothis
 
-A particular feature of our compilation setting is that both the source and target languages are relatively high-level. Furthermore, the compilation target (NumPy, in the array programming model) has many primitives that perform specific high-level operations. Therefore, to obtain fast array code, we need to recover some of these specialised operations.
+% A particular feature of our compilation setting is that both the source and target languages are relatively high-level. Furthermore, the compilation target (NumPy, in the array programming model) has many primitives that perform specific high-level operations. Therefore, to obtain fast array code, we need to recover some of these specialised operations.
 
-A naive approach would be to simply match on the syntax of the operations we perform. However, this would be a volatile approach, as small changes to the source code might result in the optimisation no longer being applied. We instead use a technique similar to \textit{normalisation by evaluation} (NbE). For each expression, we consider the normal form of its subexpressions. Then we compose these normal forms by appealing to the denotational semantics of Phi.
+% A naive approach would be to simply match on the syntax of the operations we perform. However, this would be a volatile approach, as small changes to the source code might result in the optimisation no longer being applied. We instead use a technique similar to \textit{normalisation by evaluation} (NbE). For each expression, we consider the normal form of its subexpressions. Then we compose these normal forms by appealing to the denotational semantics of Phi.
 
-\paragraph{Reductions} Recall that NumPy only offers reductions for some operations. This is part of the reason why they are not directly integrated in Phi. Still, the compiler should be able generate:
-$$ \phifold{i}{n}{x}{0.0}{x + a[i]} \leadsto \texttt{numpy.sum}(\texttt{a}) $$
-For this simple case, we just match on the Phi syntax, but we allow any initial value for the accumulator. We use the normal form:
-$$ \left\llbracket \phifold{i}{n}{x}{e}{x + f(i)} \right\rrbracket = e + \mathrm{sum}( \underline{\phivec{i}{n}{f(i)}} ) $$
-We will use $\underline{e}$ to denote \textit{opaque} terms in Phi when they are a part of the normal form.
+% \paragraph{Reductions} Recall that NumPy only offers reductions for some operations. This is part of the reason why they are not directly integrated in Phi. Still, the compiler should be able generate:
+% $$ \phifold{i}{n}{x}{0.0}{x + a[i]} \leadsto \texttt{numpy.sum}(\texttt{a}) $$
+% For this simple case, we just match on the Phi syntax, but we allow any initial value for the accumulator. We use the normal form:
+% $$ \left\llbracket \phifold{i}{n}{x}{e}{x + f(i)} \right\rrbracket = e + \mathrm{sum}( \underline{\phivec{i}{n}{f(i)}} ) $$
+% We will use $\underline{e}$ to denote \textit{opaque} terms in Phi when they are a part of the normal form.
 
-\paragraph{Clipped shifts} Suppose that we want to compute the difference array $d$ of $a$, given by: 
-$$ d = \phivec{i}{n}{a[\min(i + 1, n - 1)] - a[i]} $$ 
-To express this in NumPy we need to use whole-array operations. Say we first compute the left hand side operand. We need to make use of \textbf{slicing} (taking subarrays) and \textbf{padding} as follows:
-\begin{center}
-\begin{cminted}{python}
-numpy.pad(
-  a[1:],      # slice starting at 1
-  (0, 1),     # pad 1 at end
-  mode='edge' # use end value for pad
-)
-\end{cminted}
-\end{center}
-We argue that such a pattern can be expressed in Phi in general with:\footnote{This does not take into account different step sizes possible in slicing. This interacts with padding in unexpected ways, and further complicates the algebra, so we leave it out.}
-$$ a[\min(\max(i + s, l), h)] $$
-Where the terms $s, l, h$ do not have any free Phi indices, and $i$ is an index which is not free in $a$. Intuitively, this patterns shifts the index $i$ by $s$, and then clips it in the range $\left[ l, h \right]$.
+% \paragraph{Clipped shifts} Suppose that we want to compute the difference array $d$ of $a$, given by: 
+% $$ d = \phivec{i}{n}{a[\min(i + 1, n - 1)] - a[i]} $$ 
+% To express this in NumPy we need to use whole-array operations. Say we first compute the left hand side operand. We need to make use of \textbf{slicing} (taking subarrays) and \textbf{padding} as follows:
+% \begin{center}
+% \begin{cminted}{python}
+% numpy.pad(
+%   a[1:],      # slice starting at 1
+%   (0, 1),     # pad 1 at end
+%   mode='edge' # use end value for pad
+% )
+% \end{cminted}
+% \end{center}
+% We argue that such a pattern can be expressed in Phi in general with:\footnote{This does not take into account different step sizes possible in slicing. This interacts with padding in unexpected ways, and further complicates the algebra, so we leave it out.}
+% $$ a[\min(\max(i + s, l), h)] $$
+% Where the terms $s, l, h$ do not have any free Phi indices, and $i$ is an index which is not free in $a$. Intuitively, this patterns shifts the index $i$ by $s$, and then clips it in the range $\left[ l, h \right]$.
 
-We first describe the normal forms for $i + s$:
-\begin{align*}
-i &= i + \underline{0} \\
-\underline{s'} + (i + \underline{s}) &= (i + \underline{s}) + \underline{s'} = i + \underline{s + s'} \\
-\end{align*}
-We can then build up the normal forms for $\min(\max(i + s, l), h)$:
-\begin{align*}
-i + \underline{s} &= \min(\max(i + \underline{s}, -\infty), +\infty) \\ 
-\min(\min(\max(i + \underline{s}, \underline{l}), \underline{h}), \underline{h'}) &= \min(\max(i + \underline{s}, \underline{l}), \underline{\min(h, h')}) \\ 
-\max(\min(\max(i + \underline{s}, \underline{l}), \underline{h}), \underline{l'}) &= \min(\max(i + \underline{s}, \underline{\max(l, l')}), \underline{\max(h, l')})
-\end{align*}
-Where an index has a clipped-shift normal form, an appropriate slice and pad can be synthesised. 
+% We first describe the normal forms for $i + s$:
+% \begin{align*}
+% i &= i + \underline{0} \\
+% \underline{s'} + (i + \underline{s}) &= (i + \underline{s}) + \underline{s'} = i + \underline{s + s'} \\
+% \end{align*}
+% We can then build up the normal forms for $\min(\max(i + s, l), h)$:
+% \begin{align*}
+% i + \underline{s} &= \min(\max(i + \underline{s}, -\infty), +\infty) \\ 
+% \min(\min(\max(i + \underline{s}, \underline{l}), \underline{h}), \underline{h'}) &= \min(\max(i + \underline{s}, \underline{l}), \underline{\min(h, h')}) \\ 
+% \max(\min(\max(i + \underline{s}, \underline{l}), \underline{h}), \underline{l'}) &= \min(\max(i + \underline{s}, \underline{\max(l, l')}), \underline{\max(h, l')})
+% \end{align*}
+% Where an index has a clipped-shift normal form, an appropriate slice and pad can be synthesised. 
 
 \paragraph{Generalised tensor contractions}
 
@@ -364,14 +366,13 @@ The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \B
 \section{Code generation -- Escaping the Pointless}
 \label{escaping-the-pointless}
 
-We now finally talk about how we can make the step from the pointful Phi calculus into the point-free array programming model. In order to create an extra layer of abstraction, we devise the \textit{array calculus}, which is the final program representation we use before execution. Afterwards, we give a novel connection between pointful and point-free array programming. This is achieved through the \textit{Axial} applicative functor. We show how programs are compiled by \textit{lifting} them into the Axial. Lastly, we show some optimisations performed on the 
-We now finally talk about how we can make the step from the pointful Phi calculus into the point-free array programming model. In order to create an extra layer of abstraction, we devise the \textit{array calculus}, which is the final program representation we use before execution. Afterwards, we give a novel connection between pointful and point-free array programming. This is achieved through the \textit{Axial} applicative functor. We show how programs are compiled by \textit{lifting} them into the Axial.
+We now finally talk about how we can make the step from the pointful Phi calculus into the point-free array programming model. In order to create an extra layer of abstraction, we devise \textit{Yarr} (a point-free array calculus), which is the final program representation we interpret at runtime. Afterwards, we give a novel connection between pointful and point-free array programming. This is achieved through the \textit{Axial} applicative functor. We show how programs are compiled by \textit{lifting} them into the Axial.
 
-\subsection{Array calculus}
+\subsection{Compilation target -- Yarr, the array calculus}
 
 % \textit{We first formalise our compilation target for Phi, since so far it has only been vaguely described as the API of the NumPy library.} \todothis
 
-We use a relatively straightforward formalisation, which abstracts the interface of NumPy:
+We use a relatively straightforward formalisation of point-free array programs, which abstracts the interface of NumPy:
 \begin{align*}
 e ::=&\quad \mathrm{range}(e)   &\text{(iota -- sequence of }\mathbb N\text{ from }0\text{)} \\
 \mid&\quad \mathrm{transpose}(e, (n, \dots)) &\text{(permute axes)} \\ 
@@ -452,7 +453,7 @@ On the other hand, when $\mathrm{Index} \equiv \mathrm{Bool}$, then we obtain th
 
 \subsection{Compilation scheme}
 
-By ``reinterpreting'' Phi programs with axials -- via a process we call \textit{lifting} -- we are able to give a simple compilation scheme from Phi into the array calculus. Lifting is a standard functional programming technique, but we use it in the context of a compilation scheme. 
+By ``reinterpreting'' Phi programs with axials -- via a process we call \textit{lifting} -- we are able to give a simple compilation scheme from Phi into Yarr. Lifting is a standard functional programming technique, but we use it in the context of a compilation scheme. 
 
 \todothis
 
@@ -463,7 +464,7 @@ By ``reinterpreting'' Phi programs with axials -- via a process we call \textit{
 
 The compilation target of Ein is a high-level library in the array programming model. This means that most of the work is spent in relatively expensive whole-array operations, which dominates many overheads associated with an interpreter written in Python. As such, we can take liberties to simplify the implementation. The primary technique we use to form an execution backend is \textit{staging}. In essence, we implement a function of the form
 $$ \mathrm{Expr} \to \left( \mathrm{Env} \to \mathrm{Value} \right) $$
-where $\mathrm{Expr}$ is an expression in Phi or array calculus, and $\mathrm{Env}$ is a mapping from variables to assigned values. This essentially corresponds to directly implementing the denotational semantics $\llbracket - \rrbracket : \mathrm{Env} \to \mathrm{Value}$ of the two calculi. We represent the denotations with Python closures.
+where $\mathrm{Expr}$ is an expression in Phi or Yarr, and $\mathrm{Env}$ is a mapping from variables to assigned values. This essentially corresponds to directly implementing the denotational semantics $\llbracket - \rrbracket : \mathrm{Env} \to \mathrm{Value}$ of the two calculi. We represent the denotations with Python closures.
 
 \subsection{Naive}
 
@@ -478,9 +479,9 @@ lambda env: [2 * i for i in range(env[n])]
 
 \subsection{NumPy}
 
-We follow the same denotation-guided staging approach as in the naive backend. This time around we apply the whole suite of transformations and use Axial compilation from Phi to the array calculus. The key difference is a stricter value representation that must rely on NumPy's \texttt{ndarray}s. We set values to be either arrays, or tuples of arrays. On this basis, we also apply some NumPy-specific performance optimisations.
+We follow the same denotation-guided staging approach as in the naive backend. This time around we apply the whole suite of transformations and use Axial compilation from Phi to Yarr. The key difference is a stricter value representation that must rely on NumPy's \texttt{ndarray}s. We set values to be either arrays, or tuples of arrays. On this basis, we also apply some NumPy-specific performance optimisations.
 
-\paragraph{Bindings} In some cases, NumPy attempts not to copy arrays, and instead changes the stride representation, returning a \textit{view}. For instance, a matrix might be transposed with \texttt{numpy.transpose(a, (1, 0))}. NumPy merely marks the memory layout as transposed, rather than returning a transposed copy of the data. This is beneficial when the value is used just once, but harmful when it is reused. We make use of a heuristic approach to ensure let-bound values have a cache-efficient memory layout. Whenever a view would be bound to a variable, it is immediately copied to the target layout instead. 
+\paragraph{Bindings} In some cases, NumPy attempts not to copy arrays, and instead changes the stride representation, returning a \textit{view}. For instance, a matrix might be transposed with \texttt{numpy.transpose(a, (1, 0))}. NumPy merely marks the memory layout as transposed, rather than returning a transposed copy of the data. This is beneficial when the value is used just once, but harmful when it is reused. We make use of a heuristic approach to ensure let-bound values have a cache-efficient memory layout. Whenever a view would be bound to a variable (hence reused), it is immediately copied to the target layout instead. 
 
 Ein's let-bindings enjoy more efficient memory management than a manually-written NumPy program. In typical programs, new arrays are allocated sequentially with no explicit deallocations. Usually, memory can only be freed by the garbage collector at the end of a function's execution. With let bindings we achieve a higher granularity -- arrays can be freed as soon as they are no longer used, without user intervention.
 
@@ -511,7 +512,7 @@ return a.grad  # == b
 \end{cminted}
 \end{center}
 
-\paragraph{Abstract backend} To facilitate addition of new backends, the \texttt{AbstractArrayBackend} base class was implemented. A staging function may be derived from an instance of this interface. Both the NumPy and PyTorch backends actually implement this same interface. Nearly no glue code is necessary, as it is only necessary to translate Ein's array calculus to the corresponding API calls.
+\paragraph{Abstract backend} To facilitate addition of new backends, the \texttt{AbstractArrayBackend} base class was implemented. A staging function may be derived from an instance of this interface. Both the NumPy and PyTorch backends actually implement this same interface. Nearly no glue code is necessary, as it is only necessary to translate Yarr to the corresponding API calls.
 
 \subsection{Extrinsics}
 
