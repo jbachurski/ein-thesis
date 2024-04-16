@@ -15,30 +15,25 @@ I submitted papers on the topic of this project to two venues -- the ACM Student
 
 \subsection{Student Research Competition}
 
-The ACM Student Research Competition (SRC) consists of two stages -- the conference stage, and the Grand Finals for winners at each conference. In November I submitted a 3-page extended abstract to the SRC at the 51st ACM SIGPLAN Symposium on Principles of Programming Languages (POPL).
-I received positive reviews and an invitation to present my work in January. 
+The ACM Student Research Competition (SRC) consists of conference SRCs and the Grand Finals for winners at each conference. In November, I submitted a 3-page extended abstract to the SRC at the 51st ACM SIGPLAN Symposium on Principles of Programming Languages (POPL).
+I received positive reviews and an invitation to present my work in January at the conference. 
 There, I gave poster and oral presentations.
-Throughout the entire process I was supported by my supervisor.
-My work won \textbf{first prize} among undergraduates there. I was then invited to submit a 5-page extended abstract to the Grand Finals. Results for this stage are due later in May.
+My supervisor supported me throughout, and
+my work won \textbf{first prize} among undergraduates. 
+I was thus invited to submit a 5-page abstract to the Grand Finals, with results due later in May.
 
 \subsection{ARRAY Workshop}
 
-The ACM SIGPLAN International Workshop on Libraries, Languages and Compilers for Array Programming (ARRAY) concerns all aspects of array programming. 
-This includes topics particularly relevant to this project: language design, embedded DSLs, paradigms, and compilation schemes.
-ARRAY is colocated with the ACM SIGPLAN Conference on Programming Language Design and Implementation (PLDI).
-
-As part of the proceedings of the workshop, together with my supervisor we authored a 12-page research paper on my work in early April. I wrote the main content, with my supervisor taking an advisory role. 
-
-% TODO: Comment on results in late April.
+The ACM SIGPLAN International Workshop on Libraries, Languages and Compilers for Array Programming (ARRAY) concerns all aspects of array programming, and is colocated with the ACM SIGPLAN Conference on Programming Language Design and Implementation (PLDI). Together with my supervisor we authored a 12-page research paper for the 10th ARRAY workshop in early April. I wrote the main content, with my supervisor taking an advisory role. \textcolor{blue}{TODO: Comment on results in late April.}
 
 \needspace{2em}
 \section{Lessons learnt}
 
-Ein was by far the longest-running software project I have worked on, and the first one which involved a significant theoretical and technical background. 
+Ein was by far my longest-running software project, and the first one which involved such a significant theoretical and technical background. 
 It was necessary to study the relevant concepts in programming languages and compilers.
 Having worked with large codebases prior, the software engineering aspect did not pose as much of a challenge to me. 
 On the other hand, designing Ein -- and the fundamentals underlying it, Phi and Yarr -- was far from straightforward. 
-Furthermore, explaining and writing about my design also proved challenging. 
+Furthermore, explaining my design also proved challenging. 
 
 \subsection{Designing programming languages}
 
@@ -47,16 +42,15 @@ Ein sought to be a domain specific language for array programming -- targeting p
 \begin{description}
     \item[Domain-specific language] 
     Learning to choose the right \textbf{trade-offs} for my DSL was a major difficulty. 
-    Whenever I thought ``should I introduce this feature?'' I was constrained by thinking how much it would impact the rest of the language and the compilation scheme. 
-    I had to learn to make careful choices -- for instance including a basic loop primitive (\texttt{fold}) rather than a general while-loop -- led me to an efficient compilation scheme (in this case preserving regular data parallelism).
+    Whenever I thought ``should I introduce this feature?'' I was constrained by thinking how much it would impact the rest of the language. 
+    I had to make careful choices -- for instance, including a basic loop primitive (\texttt{fold}) rather than a general while-loop led to a compilation scheme preserving data parallelism.
     \item[Array programming] 
-    It was important to relate my project goals with what \textit{ought to be} possible in the language in the eyes of a domain practitioner. 
+    It was important to relate my project goals with what \textit{ought to be} possible in the language based on its domain. 
     To this end, I sought feedback of my colleagues in machine learning, and consulted external resources that distilled the benefits and drawbacks of the array programming model. 
     This taught me how to reconcile real-world use and language design.
     \item[Embedding in Python] 
     Python was not explicitly designed to host embedded DSLs. 
-    Though it is extremely flexible (it is dynamically typed, interpreted and allows introspection), some design choices leave it constrained. 
-    This is particularly in two main areas (where Python DSLs often fail) -- lack of flexible function overloading and variable introduction. 
+    Though it is extremely flexible (it is dynamically typed, interpreted and allows introspection), it is particularly constrained in two main areas -- function overloading and variable introduction. 
     Finding a way to include new syntactic features that would be idiomatic \textit{(Pythonic)} was another source of trade-offs.
 \end{description}
 
@@ -66,14 +60,15 @@ Throughout this project I explored many different ideas for language features.
 Unfortunately, I often lacked the necessary background to give them solid theoretical foundation. 
 While implementation was a matter of software engineering, formalising ideas and communicating them across was challenging. 
 
-Throughout the project, under encouragement of my supervisor, I submitted papers about my project to two venues (Section \ref{research-contribution}). 
+Throughout the project, under encouragement of my supervisor, I wrote and submitted two papers (Section \ref{research-contribution}). 
 This forced me to reflect on my ideas and find ways of explaining them succinctly.
 
 \section{Future work}
 
 Avenues for further work include:
 \begin{description}
-    \item[Generalising the compilation scheme] Can the Axial compilation scheme be further generalised to other combinators than array comprehensions, folds and associative reductions? Is it possible to integrate elements of irregular parallelism or jagged (non-rectangular) arrays?
-    \item[Alternative backends] Is it beneficial to compile Phi to a different representation than Yarr? Though Yarr can be consumed by a framework like Jax and passed to a specialised linear algebra compiler like XLA, this loses out on some information. Can we take advantage of methods described for Dex and $\tilde F$ in the context of Python and Ein by implementing different execution backends \cite{shaikhha2019efficient, paszke2021getting}?
-    \item[In-place updates] What is the best way of implementing safe in-place updates in the context of an embedded DSL? How can they be efficiently integrated with Ein's compiler, and what are good syntactic representations? Both Futhark and Dex offer some possible solutions \cite{henriksen2017futhark, paszke2021getting}.
+    \item[Generalising the compilation scheme] Can the Axial compilation scheme be further generalised to other combinators than array comprehensions, folds and associative reductions? Is it possible to integrate this with irregular parallelism or jagged arrays?
+    \item[Alternative backends] Is it beneficial to compile Phi to a different representation than Yarr? Though Yarr can be passed to a specialised compiler like XLA, this loses out on some information. Can we take advantage of existing work for Dex and $\tilde F$ by implementing different backends \cite{shaikhha2019efficient, paszke2021getting}?
+    \item[In-place updates] What is the best way of implementing safe in-place updates in the context of an embedded DSL? How can they be efficiently integrated with Ein's syntax and compiler? Jax, Futhark and Dex offer possible solutions \cite{jin2020compiling, henriksen2017futhark, paszke2021getting}.
 \end{description}
+I plan to release the source code of the \texttt{ein} library, so that it can be used in practice and its methods adapted into new tooling.

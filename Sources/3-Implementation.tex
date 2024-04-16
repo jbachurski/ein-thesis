@@ -15,7 +15,7 @@ Throughout this section code snippets are excerpts from executable Python using 
 \section{Theory -- Phi calculus}
 \label{phi-calculus}
 
-We begin by introducing the \textbf{Phi calculus}, which is the theoretical basis for the implementation of Ein. We outline the design choices made, and how they relate to the real capabilities of array libraries.
+We begin by introducing the functional \textbf{Phi calculus}, which is the theoretical basis for Ein. I outline the design choices I made, and how they relate to the real capabilities of array libraries.
 
 \subsection{Grammar and design}
 
@@ -86,15 +86,16 @@ Regularity is a beneficial property that ensures an efficient compilation scheme
 
 \paragraph{Conditionals} Phi does not feature a dedicated conditional expression. We consider conditionals to be a ternary scalar operator instead, which we write $\mathrm{where}(c, t, f)$ (owed to the \texttt{numpy.where} primitive). As such, both branches are always evaluated regardless of the condition. This design choice follows as the array programming model has no real notion of a \textit{branching} array computation -- both cases are evaluated, as this ensures efficient vectorisation (SIMD processing). In hardware, the related notion is \textit{predication} -- particularly in GPUs or in CPU conditional move instructions.
 
-\paragraph{Out-of-bounds} As noted, ternary conditionals evaluate both of their branches. In particular, this means that indexing operations that take place in either branch might end up out of bounds (since we cannot guard them). 
-The Jax framework tackles a similar problem, and in the context of hardware accelerators the best solution seems to be to gracefully recover from the error by clipping or wrapping the indices, or replacing results with a constant. 
-In Phi we opt to treat this as an implementation detail, but for simplicity stick to clipping into bounds.
+\paragraph{Out-of-bounds} As noted, ternary conditionals evaluate both of their branches. In particular, this means that indexing operations that take place in either branch might end up out of bounds. 
+The Jax framework tackles a similar problem, and in the context of hardware accelerators the best solution seems to be to gracefully recover from the error by clipping the indices or imputing a constant result. 
+In Phi for simplicity we stick to clipping into bounds.
 
 \paragraph{Invalid arguments} We consider it to be a runtime error where a size or number of iterations is negative. We do not dwell on this, as the semantics could easily be modified to be exception-free.
 
 \subsection{Embedding Phi in Python}
+\label{embedding-phi}
 
-We embed Phi in Python to allow constructing and validating terms in the frontend. Conceptually, we implement Phi's grammar as a sum type.\footnote{To implement this pattern in Python we use a sealed abstract base class with a child class for each case.} To construct the term $\phivec{i}{4}{\phivec{j}{4}{i \cdot j}}$, we write:
+We embed Phi in Python to allow constructing and validating terms in the frontend. Conceptually, we implement Phi's grammar as a sum type. To implement this pattern in Python, we use a sealed abstract base class \texttt{AbstractExpr} with a child class for each case of \texttt{Expr}. To construct the term $\phivec{i}{4}{\phivec{j}{4}{i \cdot j}}$, we write:
 \begin{center}
 \begin{cminted}{python}
 i, j = Index(), Index()
@@ -102,30 +103,46 @@ four = Const(Value(4))
 table = Vec(i, four, Vec(j, four, Multiply((At(i), At(j)))))
 \end{cminted}
 \end{center}
-Thanks to the simplicity of Phi's type system, we easily implement bottom-up type checking. To prevent the construction of invalid terms, constructors calculate a type based on the subterms. To facilitate this, we make use of intrinsically typed variables -- each variable atom has a \texttt{type} attribute set. Furthermore we do not use string-based names for variables or indices. Instead, we compare them for object identity, which is akin to using a \texttt{gensym}-like functionality.
+Thanks to the simplicity of Phi's type system, we easily implement bottom-up type checking. To prevent the construction of invalid terms, constructors calculate a type based on the subterms. To facilitate this, we make use of intrinsically typed variables. 
+Furthermore, instead of string-based variable names, we reuse their Python object identity, which is akin to using a \texttt{gensym}-like functionality.
 
 
 \section{Frontend -- Ein}
 \label{ein-dsl}
 
-\textbf{Ein} forms the programmer-accessible side of the project, and is implemented as the \texttt{ein} Python package. Unlike a traditional compiler, our frontend is not formed by a lexer or parser, but as a Python library functioning as a deep-embedded DSL. We provide an overview of Ein's features and its design. 
+\textbf{Ein} forms the programmer-accessible side of the project, and is implemented as the \texttt{ein} Python package. Unlike a traditional compiler, our frontend is not formed by a lexer or parser, but \texttt{ein}'s API forming the deep-embedded DSL. We provide an overview of Ein's features and its design as a purely functional, pointful array DSL.
 
 \subsection{Embedding}
 
-One of the main influences on the design of the embedding is Jax \cite{frostig2018compiling}, which lays out a solid foundation for encapsulating expressions and building programs up by tracing. This indirection can be seen as an instance of multi-stage programming, since the constructed expression can have whole-program optimisations applied to it before execution. A useful feature is that let bindings in the language are implicit, and instead object identity is used to establish the same expression is reused, which can be seen as a safe approximation of \textit{hash consing}. For example, say \texttt{a} is an Ein value. Then \texttt{a + a} indicates adding \texttt{a} to itself. Here \texttt{a} is stored and reused, rather than computed twice.
+One of the main influences on the design of the embedding is Jax \cite{frostig2018compiling}, which lays out a solid foundation.
+% for encapsulating expressions and building programs up by tracing. 
+% This indirection can be seen as an instance of multi-stage programming, since the constructed program can have global optimisations applied to it before execution. 
+DSL values transparently encapsulate an expression type (Section \ref{embedding-phi}).
+A useful feature is that let bindings in the language are implicit and later recovered by the compiler.
+% object identity is used to establish the same expression is reused, which can be seen as a safe approximation of \textit{hash consing}. 
+For example, say \texttt{a} is an Ein value, in which case \texttt{a + a} indicates adding \texttt{a} to itself. 
+Then \texttt{a} is reused in the compiled program rather than recomputed.
 
 \subsection{Arrays}
 
 % All Ein values 
 % Nearly all operations in Ein take place on values of the \texttt{Array} type. These incrementally construct expressions in the underlying calculus via tracing. 
-Similarly to Phi, Ein considers arrays to be defined recursively as either \textbf{scalars} or \textbf{vectors} of arrays. These correspond to the \texttt{Scalar} and \texttt{Vec[T]} classes. The methods of \texttt{Scalar} correspond to the scalar operators of Phi. These can be performed with operator overloading (as in \texttt{Scalar.\_\_mul\_\_} -- \texttt{a * b}) and member functions (\texttt{Scalar.sin} -- \texttt{a.sin()}). On the other hand, \texttt{Vec} implements \texttt{Vec.\_\_getitem\_\_}, so that we can write \texttt{a[i]}. These are exemplified below, with type annotations added for clarity:
+Similarly to Phi, Ein considers arrays to be defined recursively as either \textbf{scalars} or \textbf{vectors} of arrays. These correspond to the \texttt{Scalar} and \texttt{Vec[T]} classes. The methods of \texttt{Scalar} correspond to the scalar operators of Phi. These can be performed with operator overloading (as in \texttt{Scalar.\_\_mul\_\_} -- \texttt{a * b}) and methods (\texttt{Scalar.sin} -- \texttt{a.sin()}). On the other hand, \texttt{Vec} implements \texttt{Vec.\_\_getitem\_\_}, so that we can write \texttt{a[i]}. These are exemplified below, with type annotations added for clarity:
 \begin{center}
 \begin{cminted}{python}
 a: Vec[Scalar]
 b: Scalar = a[0].sin() * a[1].cos()
 \end{cminted}
 \end{center}
-These classes are used in tracing (operations on them are \textit{lazy}), and hold a Phi expression as an attribute.
+Both \texttt{Scalar} and \texttt{Vec[T]} have an \texttt{expr} attribute, and succeeding values have theirs lazily built up their corresponding Phi expression. For example: 
+\begin{center}
+\begin{cminted}{python}
+b.expr == Mul(
+    Sin(Get(a.expr, const(0))), 
+    Cos(Get(a.expr, const(1)))
+)
+\end{cminted}
+\end{center}
 
 \subsection{Combinators}
 
@@ -146,6 +163,30 @@ S[i, j] = A[i, j] + A[j, i]      # i, j still live afterwards. danger!
 This is evidently flawed, as there is nothing guarding against the reuse of variables in the wrong scope. 
 
 We have noted NumPy is a first-order interface, as its operations cannot be parameterised by functions. On the other hand, \texttt{array} and \texttt{fold} are closer to Second-Order Array Combinators, which are indispensable in Futhark. They are a major step up in Ein's expressive power.
+
+
+
+\subsection{Size inference}
+
+% TODO: This is sort of metaprogramming.
+\textit{Size inference} allows omitting the size of arrays in some contexts. Consider the following computation:
+\begin{center} 
+\begin{cminted}{python}
+array(lambda i: a[i] + b[i], size=a.size(axis=0))
+\end{cminted} 
+\end{center}
+Say that the vectors $\texttt{a}$ and $\texttt{b}$ have the same size. Then with size inference we may omit the explicit \texttt{size}:
+\begin{center} 
+\begin{cminted}{python}
+array(lambda i: a[i] + b[i])
+\end{cminted} 
+\end{center}
+Specifically, for any index \texttt{i} that does not have an explicit \texttt{size} defined, it is inferred by taking the size of any array \texttt{a} that is indexed directly with \texttt{i} (i.e. in an expression \texttt{a[i]}), which we find by term graph traversal. Where there are other such candidates \texttt{b}, we add a program assertion that \texttt{a} and \texttt{b} have the same size. We further generalise this to the \texttt{fold} combinator, as its loop counter is often used to iterate over arrays.
+
+% This is not as obvious to implement correctly as it seems at first sight. Due to the Phi typing rules, any sizes cannot (even indirectly) depend on a comprehension index nor on a value from an inner scope. Various simplifications and checks are performed to avoid bad candidates for an inferred array size.
+
+There are many mechanisms similar to size inference, for instance in Single-Assignment C and in a more structured way in Dex via its value-dependent type inference. 
+% In DSLs taking direct inspiration from Einstein summation, such approaches are often the only way of specifying array sizes. Ein also provides the flexibility of providing an explicit array size, as shown in the former example.
 
 \subsection{Records}
 
@@ -180,28 +221,28 @@ a = array(lambda i: Dual(i, 1.), size=5)  # constructs Vec[Dual]
 b = array(lambda i: a[i] * a[i])  # calls Dual.__mul__
 \end{cminted}
 \end{center}
-In contrast, most renditions of the array programming model struggle to achieve this sort of composability. Since they consider \textit{whole arrays of primitives} at a time, at best one could define a sub-classed array type of dual numbers, but this would not compose as well. In a pointful paradigm where we focus on individual elements, we can neatly define custom datatypes and consider arrays of them. What is more, efficient representation of these structures is ensured via program transformations. Record types in Ein are a \textbf{zero-cost abstraction}. A similar feature is available in Futhark (ML-style records).
+In contrast, most renditions of the array programming model struggle to achieve this sort of composability. Since they consider \textit{whole arrays of primitives}, in Python at best one could sub-class an array, but this would not compose as well. In a pointful paradigm where we focus on individual elements, we can neatly define datatypes and consider arrays of them (like in Futhark). What is more, efficient representation of these structures is ensured via program transformations. Record types in Ein are a \textbf{zero-cost abstraction}.
 
-\subsection{Value system}
+\subsection{Type system}
 
-We can now summarise the crux of Ein's \textit{value system}:
+We can now summarise the crux of Ein's \textit{type system}:
 \begin{align*}
-v \quad::=&\quad 
+\texttt{T} \quad::=&\quad 
 \text{\mintinline{python}{Scalar}}
 & \text{(scalars -- atoms)} \\
 \mid&\quad
-\text{\mintinline{python}{Vec}}[v]
+\text{\mintinline{python}{Vec}}[\texttt{T}]
 & \text{(vectors)} \\
 \mid&\quad
-\text{\mintinline{python}{dict}}[\text{\mintinline{python}{str}}, v] \,\mid\, \text{\mintinline{python}{tuple}}[v, \dots] \,\mid\, \texttt{Dataclass}_v
+\text{\mintinline{python}{dict}}[\text{\mintinline{python}{str}}, \texttt{T}] \,\mid\, \text{\mintinline{python}{tuple}}[\texttt{T}, \dots] \,\mid\, \texttt{Dataclass}_\texttt{T}
 & \text{(records)}
 \end{align*}
-While only \texttt{Scalar} and \texttt{Vec} are classes implemented by Ein, the values $v$ can be used in Ein's primitives and are closed under them. We also do some implicit casting (e.g. \mintinline{python}{float} into \texttt{Scalar}).
+While only \texttt{Scalar} and \texttt{Vec} are classes implemented by Ein, the types $\texttt{T}$ can be used in Ein's primitives and are closed under them. We also do some implicit casting (e.g. \mintinline{python}{float} into \texttt{Scalar}).
 
 The part of the Python object specifying record fields is called the \textit{layout}. Example layouts include the list of dictionary keys or the size of a tuple.
-These layouts can be easily stored and reconstructed in Ein thanks to Python's dynamism.\footnote{As noted before, we assume the layouts are static. This means we take dictionaries, tuples and dataclasses to be immutable. In practice, this is true just for tuples -- and dataclasses which are defined as \mintinline{python}{frozen=True}.}
+These layouts can be easily stored and reconstructed in Ein thanks to Python's dynamism.\footnote{As noted before, we assume the record types are static -- e.g. constant across fold iterations. This further means we take dictionaries, tuples and dataclasses to be immutable, which is part of Ein's contract.}
 
-\subsection{Typing}
+\subsection{Type annotations}
 
 Ein classes are usable as Python type annotations. 
 % For this purpose, we further split \texttt{Scalar} into \texttt{Int}, \texttt{Float} and \texttt{Bool}, which correspond to base types $\sigma$ in Phi. 
@@ -213,32 +254,10 @@ This is a significant advancement over NumPy, where this sort of static type che
 % Furthermore, during tracing Ein performs a form of basic type inference on the underlying Phi expressions. Any type errors found at that stage are reported at runtime, ensuring type safety of programs produced by the compiler. 
 
 
-\subsection{Size inference}
-
-% TODO: This is sort of metaprogramming.
-\textit{Size inference} allows omitting the size of arrays in some contexts. Consider the following computation:
-\begin{center} 
-\begin{cminted}{python}
-array(lambda i: a[i] + b[i], size=a.size(axis=0))
-\end{cminted} 
-\end{center}
-Say that the vectors $\texttt{a}$ and $\texttt{b}$ have the same size. Then with size inference we may omit the explicit \texttt{size}:
-\begin{center} 
-\begin{cminted}{python}
-array(lambda i: a[i] + b[i])
-\end{cminted} 
-\end{center}
-Specifically, for any index \texttt{i} that does not have an explicit \texttt{size} defined, it is inferred by taking the size of any array \texttt{a} that is indexed directly with \texttt{i} (i.e. in an expression \texttt{a[i]}), which we find by term graph traversal. Where there are other such candidates \texttt{b}, we add a program assertion that \texttt{a} and \texttt{b} have the same size. We further generalise this to the \texttt{fold} combinator, as its loop counter is often used to iterate over arrays.
-
-% This is not as obvious to implement correctly as it seems at first sight. Due to the Phi typing rules, any sizes cannot (even indirectly) depend on a comprehension index nor on a value from an inner scope. Various simplifications and checks are performed to avoid bad candidates for an inferred array size.
-
-There are many mechanisms similar to size inference, for instance in Single-Assignment C and in a more structured way in Dex via its value-dependent type inference. In DSLs taking direct inspiration from Einstein summation, such approaches are often the only way of specifying array sizes. Ein also provides the flexibility of providing an explicit array size, as shown in the former example.
-
-
 \section{Analyses}
 \label{compiler-analyses}
 
-We now describe the main analyses applied on Phi calculus, which facilitate further transformations and efficient code generation. Since Ein produces Phi term graphs through the tracing process, this is the main form on which we perform our analyses and transformations.
+We now describe the main analyses applied on Phi calculus, which facilitate further transformations and efficient code generation. Since Ein produces Phi term graphs, this is the main form on which we operate.
 
 \subsection{Normalisation of high-level operations}
 
@@ -309,7 +328,7 @@ The two main techniques applied are \textbf{common subexpression elimination} an
 $$ 
 \phivec{i}{n}{a[i] + \left( \phivec{j}{n}{2 \cdot b[j]} \right)[i]} \quad\leadsto\quad \philet{c}{\phivec{i}{n}{2 \cdot b[i]}}{\phivec{i}{n}{a[i] + c[i]}} 
 $$
-We consider both of these transformations to be a special cases of let insertion. As such, the implementation focuses on determining the expressions which should be let-bound. In addition, we need to determine the program point at which the binding should be performed. For simplicity, we associate program points with nodes in the term graph -- which are just terms. We have reduced the problem to determining for each term $t$, a list of terms $t'$ so that we transform $t \leadsto \philet{x}{t'}{[x/t']t}$. The substitution of a variable $x$ for $t'$ is performed by syntactic replacement.
+We consider both of these transformations to be a special cases of \textbf{let insertion}. As such, the implementation determines the expressions which should be let-bound and at which program point this should happen. For simplicity, we associate program points with nodes in the term graph -- which are just terms. We have reduced the problem to determining for each term $t$, a list of terms $t'$ bound at $t$, meaning we rewrite $t \leadsto \philet{x}{t'}{\{x/t'\}t}$. The substitution $\{x/t'\}$ of a variable $x$ for $t'$ is performed by syntactic replacement.
 
 An important simplification of the problem setup is that Phi calculus is entirely pure (there are no side effects). Any let insertions performed in this manner of ``reverse-substitution'' preserve program semantics. Additionally, we make use of the assumption that all subexpressions are evaluated at least once. Recall that conditionals in Phi evaluate both conditional branches. We similarly assume all loops iterate at least once.
 
@@ -321,20 +340,20 @@ We compute the immediate dominators with the \texttt{networkx} package, which ha
 
 Since after CSE we have an AST, we can perform a tree traversal on it. For each term $t$, there is a stack of loop terms that it is a subterm of, and we can update it as part of the traversal. Each of these loop terms $s_\ell$ (and any let-bindings inside) introduces a set of symbols $S_\ell$, so the stack induces a sequence $(S_1, S_2, \dots, S_k)$. Denote the free symbols in $t$ as $T$. We observe the following: if $\left( S_\ell \cup \cdots \cup S_k \right) \cap T = \emptyset$, then it is safe to let-bind $t$ prior to the loop $s_\ell$. On the other hand, $t$ will be computed the fewest times if it is moved to the outermost loop. Hence, we pick the minimum $\ell$ that preserves lexical scopes. We find and insert this let-binding for all non-atomic terms $t$.
 
-A particularly tricky part of the implementation is the ordering in which these insertions are performed. Making the wrong choices results in scope errors or infinite terms. However, a careful implementation avoids these issues. 
-
+A particularly tricky part of the implementation is the ordering in which these insertions are performed. Making the wrong choices results in scope errors or infinite terms. 
+% However, a careful implementation avoids these issues. 
 Lastly, there are cases in which bindings may become trivial, i.e. of the form $\philet{x}{y}{e}$. To erase these, we perform a basic form of \textbf{copy propagation} by inlining (substituting) all trivial bindings.
 
 \subsection{Array-of-structs to struct-of-arrays}
 
-A standard technique in array programming is the array of structs (AoS) to struct of arrays (SoA) transformation. The Ein compiler uses it to reduce away the arbitray vector types to simple arrays of primitive types. This is important, as our compilation target -- NumPy,\footnote{Technically, NumPy does allow defining custom \texttt{dtype}s, but this feature is limited in use and intended for (de)serialising binary data. Corresponding features are not available in deep learning frameworks, so relying on this is undesirable.} and array libraries generally -- lack support for arrays of composite types like pairs. Furthermore, recall the definition of types in Phi. Once we eliminate arrays of pairs, the only types $\tau'$ are given by:
+A standard technique in array programming is the array of structs (AoS) to struct of arrays (SoA) transformation. The Ein compiler uses it to reduce away the arbitray vector types to simple arrays of primitive types. This is important, as our compilation target -- NumPy,\footnote{Technically, NumPy does allow defining custom \texttt{dtype}s, but this feature is limited in use and intended for (de)serialising binary data. Corresponding features are not available in deep learning frameworks, so relying on this is undesirable.} and array libraries generally -- lack support for arrays of composite types like pairs. Once we eliminate arrays of pairs, the only types $\tau'$ are given by:
 \begin{align*}
 \alpha &::= \sigma \mid \Box \alpha \\
 \tau' &::= \alpha \mid \tau' \times \tau'
 \end{align*}
-Hence, $\tau'$ can only be tuples of arrays. This vastly simplifies compilation and runtime value representation. An AoS-to-SoA transformation is also applied in $\tilde F$ and Futhark, but it is not described in detail. 
+Hence, $\tau'$ can only be tuples of arrays. This vastly simplifies compilation and runtime value representation. An AoS-to-SoA transformation is also applied in $\tilde F$ and Futhark, but it is not described in detail \cite{henriksen2017futhark, shaikhha2019efficient}. 
 
-The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \Box \tau_1 \times \Box \tau_2$, i.e. for each array of pairs there is an equivalent pair of arrays (with all arrays the same size). As such, we need only consider the introduction and elimination forms of arrays of pairs -- comprehensions and indexing. The transformation is depicted in Figure \ref{fig:aos-to-soa}. We apply it directly on the term graph. 
+The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \Box \tau_1 \times \Box \tau_2$, i.e. for each array of pairs there is an equivalent pair of arrays (of the same size). As such, we need only consider the introduction and elimination forms of arrays of pairs. The core transformation is depicted in Figure \ref{fig:aos-to-soa}.
 
 \newcommand{\phisoa}[1]{\mathcal S \left\llbracket {#1} \right\rrbracket}
 \newcommand{\phitupleindex}[2]{\mathcal P \left\llbracket {#1}, {#2} \right\rrbracket}
@@ -359,7 +378,7 @@ The isomorphism the operation relies on is $\Box (\tau_1 \times \tau_2) \cong \B
 &\text{(and similarly for other cases)} \\[0.5em]
 \phisoa{\phivectype{(\phipairtype{\tau_1}{\tau_2}})} &= \phipairtype{\phivectype{\tau_1}}{\phivectype{\tau_2}} &\text{(identity otherwise)}
     \end{align*}
-    \caption{A type-driven AoS-to-SoA transformation on Phi, denoted by $\mathcal S$. $\mathcal P$ maps an indexing to all arrays in the tuple. Environments $\Gamma; \Delta$ are passed through implicitly, in accordance with typing rules.}
+    \caption{The core of the type-driven AoS-to-SoA transformation on Phi, denoted by $\mathcal S$. $\mathcal P$ maps an indexing to all arrays in the tuple. Environments $\Gamma; \Delta$ are passed through implicitly, in accordance with typing rules.}
     \label{fig:aos-to-soa}
 \end{figure}
 
