@@ -198,7 +198,7 @@ I distinguish three kinds of such tests:
 Correct outputs are generated with Python reference code.
 To obtain baseline outputs for Phi programs constructed by Ein I use the na\"ive Phi interpreter.
 This allows diagnosis whether the problem is with the compiler to Yarr or the source Phi.
-Outputs are treated as correct even when equality is approximate (with the default relative error of \texttt{numpy.testing.assert\_allclose}), as many tests use floating point arithmetic. 
+Outputs are treated as correct even when equality is approximate (with defaults of \texttt{numpy.testing.assert\_allclose}), as many tests use floating point arithmetic. 
 Specifics of floating point semantics are often disregarded in domains like machine learning due to the limitations they cause in optimisations -- for instance, floating point addition is not associative \cite{alawi2004every}.
 
 Most tests are parameterised by execution backend (through \texttt{pytest.mark.parametrise}) and run on random inputs. Since control flow in Phi is limited, random data is essentially sufficient to capture whether compiled programs behave correctly. 
@@ -341,22 +341,24 @@ It is worth note that the other two cases used in the test suite -- NN and KMean
 
 \paragraph{Discussion} Benchmark results can be seen in Figure \ref{fig:benchmark-results}. 
 We reach our efficiency goal -- Ein is no more than 60\% slower than the baseline, and in some cases it is up to 40\% faster.
-Ein's compiler performs various optimisations -- especially avoiding allocation of temporary arrays by reusing existing memory for intermediate computations. 
+Ein's is able to perform various optimisations -- eliminating allocations of temporary arrays is especially influential. 
 On the other hand, performance deficits are especially due to missing advanced indexing strategies -- particularly in Stencil.
 However, the baseline Stencil implementation is ridden with error-prone expressions. 
 It contains nearly a dozen complex indexing expressions like \mintinline{python}{A[1:-1, :-2, 1:-1]}, which in Ein end up translated to forms like \mintinline{python}{A[x, y - 1, z]}.
 Therefore we conclude Ein offers a good trade-off on code readability and performance.
 
-\newpage
+
 \section{Work completed}
 
-We overview the work completed basing on the success criteria from the proposal: \begin{description}
-    \item[Embedding an array language in Python] The implemented \texttt{ein} library successfully embeds\footnote{The original proposal unfortunately contained a misunderstanding of the phrase \textit{shallow} embedding. In reality, the intended meaning was that of a \textit{deep} embedding. This mistake was corrected after further literature search.} a pointful array language -- Ein -- in Python. Ein's API builds up terms in the Phi calculus, after which it allows calling out to the compiler to evaluate the program with an execution backend. Key extensions on the proposed core interface are: size inference, general \texttt{fold} and \texttt{reduce} combinators, extrinsics, rich record types, support for type annotations.
+We summarise the work completed basing on the success criteria from the proposal: \begin{description}
     \item[Designing a pointful array calculus] Phi was designed successfully, and ended up building on the $\tilde F$ language due to \textcite{shaikhha2019efficient}. This further includes various extensions with respect to the proposal: fully-fledged pair types, size assertions, folds, and associative reductions.
-    \item[Efficient execution backend] We compile pointful array programs (in the Phi calculus) by generating point-free array code (Yarr calculus) using the mathematical foundation of Axials. Yarr programs can be efficiently interpreted by calling NumPy routines. A key extension was the inclusion of a PyTorch backend, taking advantage of hardware acceleration and automatic differentation.
+    \item[Embedding an array language in Python] The implemented \texttt{ein} library successfully embeds a pointful array language -- Ein -- in Python. Ein's API builds up terms in the Phi calculus, after which it allows calling out to the compiler to evaluate the program with an execution backend. Key extensions on the proposed core interface are: size inference, general \texttt{fold} and \texttt{reduce} combinators, extrinsics, rich record types, and support for type annotations.
+    \item[Efficient execution backend] We compile pointful array programs (in the Phi calculus) by generating point-free array code (Yarr calculus) using the foundation of the newly introduced Axials. Yarr programs are efficiently interpreted by calling NumPy routines. A key extension was the inclusion of a PyTorch backend, taking advantage of hardware acceleration and automatic differentation.
 \end{description}
 Ein's compiler middle-end was also suitable for extensions: the array-of-structs to struct-of-arrays transformation and outlining (common subexpression elimination and loop-invariant code motion).
 
+
+\needspace{2em}
 \section{Summary}
 
 Throughout this chapter we have seen that Ein is expressive, and can be superior in usability as an alternative to NumPy. 

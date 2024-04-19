@@ -2,11 +2,10 @@
 
 The project was a complete success. 
 I have met all of the success criteria, and greatly expanded upon them with various extensions. 
-I introduced novel techniques that reconcile colossal engineering efforts on the array programming model, and the promises of the pointful array programming paradigm. 
-I also embedded several language features in Python one might not expect to be possible with existing array libraries. 
-Due to Python's dominant role in machine learning and scientific computing, my techniques can be adapted to this ecosystem. 
+I introduced novel techniques that allow the reconciliation the engineering efforts on the array programming model and the promises of pointful array programming. 
+Through them, I embedded language features in Python one might not expect to be possible with existing array libraries. 
+Due to Python's dominant role in machine learning and scientific computing, these techniques can have real impact on real-world work. 
 On this basis, Ein represents an advance of array programming in Python.
-
 
 \section{Research contribution}
 \label{research-contribution}
@@ -18,8 +17,8 @@ I submitted papers on the topic of this project to two venues -- the ACM Student
 The ACM Student Research Competition (SRC) consists of conference SRCs and the Grand Finals for winners at each conference. In November, I submitted a 3-page extended abstract to the SRC at the 51st ACM SIGPLAN Symposium on Principles of Programming Languages (POPL).
 I received positive reviews and an invitation to present my work in January at the conference. 
 There, I gave poster and oral presentations.
-My supervisor supported me throughout, and
-my work won \textbf{first prize} among undergraduates. 
+My supervisor supported me throughout.
+I was awarded \textbf{first prize} among undergraduates. 
 I was thus invited to submit a 5-page abstract to the Grand Finals, with results due later in May.
 
 \subsection{ARRAY Workshop}
@@ -42,8 +41,8 @@ Ein sought to be a domain specific language for array programming -- targeting p
 \begin{description}
     \item[Domain-specific language] 
     Learning to choose the right \textbf{trade-offs} for my DSL was a major difficulty. 
-    Whenever I thought ``should I introduce this feature?'' I was constrained by thinking how much it would impact the rest of the language. 
-    I had to make careful choices -- for instance, including a basic loop primitive (\texttt{fold}) rather than a general while-loop led to a compilation scheme preserving data parallelism.
+    Whenever I thought ``should I introduce this feature?'', I was constrained by its impact on the rest of the language. 
+    I had to make careful choices -- for instance, including a simpler loop primitive (\texttt{fold}) rather than a general while-loop led to a compilation scheme preserving data parallelism.
     \item[Array programming] 
     It was important to relate my project goals with what \textit{ought to be} possible in the language based on its domain. 
     To this end, I sought feedback of my colleagues in machine learning, and consulted external resources that distilled the benefits and drawbacks of the array programming model. 
@@ -69,6 +68,6 @@ Avenues for further work include:
 \begin{description}
     \item[Generalising the compilation scheme] Can the Axial compilation scheme be further generalised to other combinators than array comprehensions, folds and associative reductions? Is it possible to integrate this with irregular parallelism or jagged arrays?
     \item[Alternative backends] Is it beneficial to compile Phi to a different representation than Yarr? Though Yarr can be passed to a specialised compiler like XLA, this loses out on some information. Can we take advantage of existing work for Dex and $\tilde F$ by implementing different backends \cite{shaikhha2019efficient, paszke2021getting}?
-    \item[In-place updates] What is the best way of implementing safe in-place updates in the context of an embedded DSL? How can they be efficiently integrated with Ein's syntax and compiler? Jax, Futhark and Dex offer possible solutions \cite{jin2020compiling, henriksen2017futhark, paszke2021getting}.
+    \item[In-place updates] What is the best way of implementing safe in-place updates in the context of an embedded DSL? How can they be efficiently integrated with Ein's syntax and compiler? Jax, Futhark and Dex offer possible solutions \cite{frostig2018compiling, henriksen2017futhark, paszke2021getting}.
 \end{description}
-I plan to release the source code of the \texttt{ein} library, so that it can be used in practice and its methods adapted into new tooling.
+I plan to release the source code of the \texttt{ein} library under an open licence, so that it may be used in practice and its methods adapted into new tooling.

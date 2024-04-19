@@ -7,8 +7,11 @@
 \usepackage{amssymb}
 \usepackage{amsmath}
 \usepackage{amsfonts}
+\usepackage{mathtools}
 \usepackage{ebproof}
 \usepackage{stmaryrd}
+
+\usepackage{makecell}
 
 \usepackage{tikz}
 \usepackage{pgfplots}
@@ -20,8 +23,15 @@
 %TC:envir displaymath 0 word
 %TC:envir math 0 word
 %TC:envir comment 0 0
+%TC:macro \texttt [ignore]
+%TC:macro \mintinline [ignore]
+%TC:macro \cite [ignore]
+%TC:macro \textcite [ignore]
 
-\newcommand{\todothis}{\begin{center} \textcolor{purple}{TODO} \end{center}}
+\newcommand{\todoaround}{\begin{center} \textcolor{purple}{TODO} \end{center}}
+\newcommand{\todohere}{\textcolor{purple}{TODO}}
+\newcommand{\todoaroundof}[1]{\begin{center} \textcolor{purple}{TODO: {#1}} \end{center}}
+\newcommand{\todohereof}[1]{\textcolor{purple}{(TODO: {#1})}}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Adjustments
@@ -128,8 +138,8 @@
 %TC:ignore
 \frontmatter
   \include{Sources/Title}
-  % \include{Sources/Declaration}
-  % \include{Sources/Proforma}
+  \include{Sources/Declaration}
+  \include{Sources/Proforma}
 
   \tableofcontents
  
@@ -143,11 +153,6 @@
   \include{Sources/5-Conclusions}
 %TC:ignore
 
-  \appendix 
-
-  % \chapter{Project Proposal}
-  % \include{Sources/Proposal}
-
 % This ensures that the subsequent sections are being included as root
 % items in the bookmark structure of your PDF reader.
 \bookmarksetup{startatroot}
@@ -160,8 +165,13 @@
   %   \printglossary
   % \endgroup
 
-  \backmatter
-  \printbibliography
+  {\backmatter
+  \printbibliography}
+
+  \addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
+  \appendix 
+  \include{Sources/Proposal}
+
   % \printindex
 
 %TC:endignore
