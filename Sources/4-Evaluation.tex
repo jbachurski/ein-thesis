@@ -15,7 +15,7 @@ We evaluate the expressiveness of Ein from two perspectives: \begin{itemize}
 I argue that Ein is a superior alternative to NumPy-like array frameworks in a variety of cases. 
 Ein's design takes advantage of the pointful style and higher-order combinators. 
 It introduces language features unseen in the array programming model.
-On the other hand, NumPy is occasionally more concise and is much more mature as software, but often generalises badly to non-standard operations. 
+On the other hand, NumPy is occasionally more concise and is much more mature as software, but often leads to bad code for complex operations.
 To illustrate the key points, we follow a few case studies and discuss the differences between Ein and NumPy implementations.
 
 \subsubsection{Logits in a Graph Attention Network}
@@ -45,7 +45,7 @@ def logits(att_1, att_2, att_e, att_g):
 It is worth remarking that the Ein code compiles into NumPy calls which are just as efficient as the base implementation. We move on to discuss the key differences:
 
 \begin{description}
-    \item[Shape manipulation] The array programming model revolves around manipulating array shapes to `align' them for subsequent whole-array operations. This does not generalise well to \textbf{many-dimensional data} -- the code becomes polluted with \textit{axis indexing}. The syntax of the applied operations is unhelpful in determining their semantics. In contrast, Ein code relies on index-oriented descriptions. Extending the implementation with another dimension is just adding another index -- rather than modifying fragile arguments to routines (like in NumPy). Additionally, index names serve to hint at the meaning of array dimensions -- like variable names hint at data they store.
+    \item[Shape manipulation] The array programming model revolves around manipulating array shapes to `align' them for subsequent whole-array operations. This does not generalise well to \textbf{many-dimensional data} -- the code becomes polluted with these manipulations (and \textit{axis indexing}), and hence syntax becomes unhelpful in determining the actual semantics. In contrast, Ein code relies on index-oriented descriptions. Extending the implementation with another dimension is just adding another index -- rather than modifying fragile arguments to NumPy routines. Additionally, index names serve to hint at the meaning of dimensions -- like variable names hint at data they store.
     % this is reminiscent of manipulating a program in a de Bruijin index representation, which is not convenient for a human.  
     \item[Batching] The Ein code is different from what was foreshadowed in the Introduction. We separated out \textcolor{blue}{\texttt{batch\_logits}}, which does most of the work, but disregarding the \textit{batch axis} (named \texttt{b}). A batch axis is a pervasive code structuring technique in NumPy code, which allows mapping an operation over many inputs (in our NumPy code comments denote it \texttt{B}). It is assumed that it will be carried through in broadcasting. In Ein, we explicitly map elements across each index \texttt{b}. This is clearer in intent and avoids arbitrary code conventions.
 \end{description}
@@ -261,7 +261,7 @@ A benchmark case worth special note is \textit{Semirings}, which was implemented
 The NumPy baseline is a standard $\mathcal O(n^3)$ implementation of the Floyd-Warshall all-pairs shortest paths algorithm. 
 In Ein, I instead make rich use of arrays of user-defined dataclass types. 
 I follow the approach of \textcite{dolan2013fun} for solving a general family of problems via matrices over \textit{closed semirings}%
-\footnote{A \textit{closed semiring} is a algebraic structure following certain algebraic laws.
+\footnote{A \textit{closed semiring} is an algebraic structure following certain algebraic laws.
 From an implementation perspective, they are a type which defines some closed binary operations ($+$, $\times$, and closure) and constants ($0$, $1$).
 They are a useful abstraction -- for instance, the \textit{tropical semiring} turns out to capture shortest paths in a graph \cite{lehmann1977algebraic}.}.
 I implemented his generic approach in Ein, taking advantage of efficient array operations.
@@ -287,7 +287,7 @@ class SemiringMatrix:
 
 It is worth note that the other two cases used in the test suite -- NN and KMeans (from Rodinia) -- were excluded from the benchmark. A computationally efficient implementation of these relies on features unavailable in Ein (respectively in-place updates and histogram computations). They could be mimicked through extrinsics in practice, but their use would not constitute a useful benchmark.
 
-\paragraph{Methodology} Benchmarks were conducted on an M1 Pro MacBook (14-inch, 2021). The versions used were CPython \texttt{3.11.6} and NumPy \texttt{1.26.4}. No further thread parallelism was used beyond what is used by default in NumPy (in linear algebra routines). Large problem sizes are used (about 1 second of execution time), taking the minimum time across at least 5 runs. Minimum time is used as each benchmark performs the same number of operations per run, so most overheads are caused by external factors.
+\paragraph{Methodology} Benchmarks were conducted on an M1 Pro MacBook (14-inch, 2021). The versions used were CPython \texttt{3.11.6} and NumPy \texttt{1.26.4}. No further thread parallelism was used beyond what is used by default in NumPy (in linear algebra routines). Large problem sizes are used (about $1\,\mathrm{s}$ of execution time), taking the minimum time across at least 5 runs. Minimum time is used as each benchmark performs the same number of operations per run, so most overheads are caused by external factors. Ein's compilation time was not included in the measurement, but it is on the order of $2\,\mathrm{ms}$ and thus negligible.
 
 \begin{figure}[b]
     \centering
@@ -349,6 +349,7 @@ Therefore we conclude Ein offers a good trade-off on code readability and perfor
 
 
 \section{Work completed}
+\label{work-completed}
 
 We summarise the work completed basing on the success criteria from the proposal: \begin{description}
     \item[Designing a pointful array calculus] Phi was designed successfully, and ended up building on the $\tilde F$ language due to \textcite{shaikhha2019efficient}. This further includes various extensions with respect to the proposal: fully-fledged pair types, size assertions, folds, and associative reductions.

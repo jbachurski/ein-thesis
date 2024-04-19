@@ -1,10 +1,10 @@
 \chapter{Conclusions}
 
 The project was a complete success. 
-I have met all of the success criteria, and greatly expanded upon them with various extensions. 
+I have met all of the success criteria, and greatly expanded upon them (Section \ref{work-completed}). 
 I introduced novel techniques that allow the reconciliation the engineering efforts on the array programming model and the promises of pointful array programming. 
 Through them, I embedded language features in Python one might not expect to be possible with existing array libraries. 
-Due to Python's dominant role in machine learning and scientific computing, these techniques can have real impact on real-world work. 
+Due to Python's dominant role in machine learning and scientific computing, these techniques can have real-world impact. 
 On this basis, Ein represents an advance of array programming in Python.
 
 \section{Research contribution}
@@ -14,12 +14,10 @@ I submitted papers on the topic of this project to two venues -- the ACM Student
 
 \subsection{Student Research Competition}
 
-The ACM Student Research Competition (SRC) consists of conference SRCs and the Grand Finals for winners at each conference. In November, I submitted a 3-page extended abstract to the SRC at the 51st ACM SIGPLAN Symposium on Principles of Programming Languages (POPL).
-I received positive reviews and an invitation to present my work in January at the conference. 
+The ACM Student Research Competition (SRC) consists of conference SRCs and the Grand Finals for winners at each conference. In November, I submitted a 3-page extended abstract to the SRC at the 51st ACM SIGPLAN Symposium on Principles of Programming Languages (POPL), and received an invitation to present my work in January at the conference. 
 There, I gave poster and oral presentations.
 My supervisor supported me throughout.
-I was awarded \textbf{first prize} among undergraduates. 
-I was thus invited to submit a 5-page abstract to the Grand Finals, with results due later in May.
+I was awarded \textbf{first prize} among undergraduates, and hence invited to submit a 5-page abstract to the Finals, with results due later in May.
 
 \subsection{ARRAY Workshop}
 
@@ -41,16 +39,17 @@ Ein sought to be a domain specific language for array programming -- targeting p
 \begin{description}
     \item[Domain-specific language] 
     Learning to choose the right \textbf{trade-offs} for my DSL was a major difficulty. 
-    Whenever I thought ``should I introduce this feature?'', I was constrained by its impact on the rest of the language. 
-    I had to make careful choices -- for instance, including a simpler loop primitive (\texttt{fold}) rather than a general while-loop led to a compilation scheme preserving data parallelism.
+    Whenever I thought about a new feature, I was constrained by its impact on the rest of the language. 
+    I had to make careful choices -- for instance, including the simpler \texttt{fold} rather than a general while-loop led to a compilation scheme preserving data parallelism.
     \item[Array programming] 
     It was important to relate my project goals with what \textit{ought to be} possible in the language based on its domain. 
-    To this end, I sought feedback of my colleagues in machine learning, and consulted external resources that distilled the benefits and drawbacks of the array programming model. 
-    This taught me how to reconcile real-world use and language design.
+    To this end, I sought feedback from my colleagues in machine learning, and consulted external resources.
+    % that distilled the benefits and drawbacks of the array programming model. 
+    This taught me reconciling real-world use and language design.
     \item[Embedding in Python] 
     Python was not explicitly designed to host embedded DSLs. 
-    Though it is extremely flexible (it is dynamically typed, interpreted and allows introspection), it is particularly constrained in two main areas -- function overloading and variable introduction. 
-    Finding a way to include new syntactic features that would be idiomatic \textit{(Pythonic)} was another source of trade-offs.
+    Though it is extremely flexible (it is dynamically typed, interpreted and allows introspection), it is constrained in two main areas -- function overloading and variable introduction. 
+    Finding a way to include new syntactic features that would be idiomatic \textit{(Pythonic)} was a source of trade-offs.
 \end{description}
 
 \subsection{Expressing ideas}
@@ -67,7 +66,11 @@ This forced me to reflect on my ideas and find ways of explaining them succinctl
 Avenues for further work include:
 \begin{description}
     \item[Generalising the compilation scheme] Can the Axial compilation scheme be further generalised to other combinators than array comprehensions, folds and associative reductions? Is it possible to integrate this with irregular parallelism or jagged arrays?
-    \item[Alternative backends] Is it beneficial to compile Phi to a different representation than Yarr? Though Yarr can be passed to a specialised compiler like XLA, this loses out on some information. Can we take advantage of existing work for Dex and $\tilde F$ by implementing different backends \cite{shaikhha2019efficient, paszke2021getting}?
-    \item[In-place updates] What is the best way of implementing safe in-place updates in the context of an embedded DSL? How can they be efficiently integrated with Ein's syntax and compiler? Jax, Futhark and Dex offer possible solutions \cite{frostig2018compiling, henriksen2017futhark, paszke2021getting}.
+    \item[Alternative backends] Is it beneficial to compile Phi to a different representation than Yarr? 
+    % Though Yarr can be passed to a specialised compiler like XLA, this loses out on some information. 
+    Can we take advantage of existing work for Dex and $\tilde F$ by implementing different backends \cite{shaikhha2019efficient, paszke2021getting}?
+    \item[In-place updates] What is the best way of implementing safe in-place updates in the context of an embedded DSL? 
+    % How can they be efficiently integrated with Ein's syntax and compiler? 
+    Jax, Futhark and Dex offer possible solutions \cite{frostig2018compiling, henriksen2017futhark, paszke2021getting}.
 \end{description}
 I plan to release the source code of the \texttt{ein} library under an open licence, so that it may be used in practice and its methods adapted into new tooling.
