@@ -20,7 +20,7 @@ To illustrate the key points, we follow a few case studies and discuss the diffe
 
 \subsubsection{Logits in a Graph Attention Network}
 
-Our flagship example of an unwieldy many-dimensional operation is the logit computation in a Graph Attention Network (GAT), as introduced in the very first chapter. The NumPy implementation below was paraphrased from the original real-world Jax code (the interface of which is based on NumPy):
+Our flagship example of an unwieldy many-dimensional operation is the logit computation in a Graph Attention Network (GAT), as introduced in the very first chapter. The NumPy implementation below was paraphrased from the original real-world JAX code (the interface of which is based on NumPy):
 \begin{center}
 \begin{cminted}{python}
 def logits(att_1, att_2, att_e, att_g):
@@ -255,7 +255,7 @@ We consider Ein to be \textit{efficient} if at large problem sizes the running t
 
 \paragraph{Suite} Our benchmark suite (Table \ref{tab:benchmarks}) builds on the findings from Section \ref{suite-review}. 
 Most cases are sourced from Futhark benchmarks \cite{The_Futhark_Hackers_futhark-benchmarks} (as done by Dex) and open-source implementations of deep learning architectures.
-I hand-translated all of the cases from the source language (Futhark, or Python using PyTorch/Jax) into equivalent a pair of programs in Python using Ein or NumPy.
+I hand-translated all of the cases from the source language (Futhark, or Python using PyTorch/JAX) into equivalent a pair of programs in Python using Ein or NumPy.
 
 A benchmark case worth special note is \textit{Semirings}, which was implemented from scratch. 
 The NumPy baseline is a standard $\mathcal O(n^3)$ implementation of the Floyd-Warshall all-pairs shortest paths algorithm. 
@@ -354,7 +354,7 @@ Therefore we conclude Ein offers a good trade-off on code readability and perfor
 We summarise the work completed basing on the success criteria from the proposal: \begin{description}
     \item[Designing a pointful array calculus] Phi was designed successfully, and ended up building on the $\tilde F$ language due to \textcite{shaikhha2019efficient}. This further includes various extensions with respect to the proposal: fully-fledged pair types, size assertions, folds, and associative reductions.
     \item[Embedding an array language in Python] The implemented \texttt{ein} library successfully embeds a pointful array language -- Ein -- in Python. Ein's API builds up terms in the Phi calculus, after which it allows calling out to the compiler to evaluate the program with an execution backend. Key extensions on the proposed core interface are: size inference, general \texttt{fold} and \texttt{reduce} combinators, extrinsics, rich record types, and support for type annotations.
-    \item[Efficient execution backend] We compile pointful array programs (in the Phi calculus) by generating point-free array code (Yarr calculus) using the foundation of the newly introduced Axials. Yarr programs are efficiently interpreted by calling NumPy routines. A key extension was the inclusion of a PyTorch backend, taking advantage of hardware acceleration and automatic differentation.
+    \item[Efficient execution backend] We compile pointful array programs (in the Phi calculus) by generating point-free array code (Yarr calculus) using the foundation of the newly introduced Axials. Yarr programs are efficiently interpreted by calling NumPy routines. A key extension was the inclusion of a additional backends -- using PyTorch and JAX rather than NumPy -- allowing Ein to take advantage of hardware acceleration and automatic differentation.
 \end{description}
 Ein's compiler middle-end was also suitable for extensions: the array-of-structs to struct-of-arrays transformation and outlining (common subexpression elimination and loop-invariant code motion).
 
