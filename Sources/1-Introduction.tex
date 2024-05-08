@@ -1,8 +1,8 @@
 \chapter{Introduction}
 
-In his Turing Award Lecture, \textit{Notation as a Tool of Thought}, Iverson argues for the importance of programming language design through the lens of mathematical notation  \cite{iverson2007notation}. The \textit{array programming model} he introduced in APL is still in use today thanks to its performance and conciseness. The ideas presented by it were revolutionary, particularly the brevity of the language and expressiveness despite its relatively simple grammar. It contrasts in many ways with numerical languages of its time, such as FORTRAN -- as Smillie describes in \textit{Discovering Array Languages} \cite{smillie2000lecture}. 
+In his Turing Award Lecture, \textit{Notation as a Tool of Thought}, Iverson argues for the importance of programming language design through the lens of mathematical notation  \cite{iverson2007notation}. The \textit{array programming model} he introduced in APL is still in use today thanks to its performance and conciseness. The ideas presented in APL were revolutionary -- particularly the brevity of the language and expressiveness, despite its relatively simple grammar. It contrasts in many ways with numerical languages of its time, such as FORTRAN -- as Smillie describes in \textit{Discovering Array Languages} \cite{smillie2000lecture}. 
 
-APL's ideas certainly stood the test of time in its various implementations and the languages it influenced, such as J or MatLab. But this begs the question -- is the model still appropriate for use in modern applications such as deep learning, or is there need for a new notation?
+APL's ideas certainly stood the test of time in the languages it influenced, such as J or MatLab. But this begs the question: is the model still appropriate for use in modern applications -- such as deep learning -- or is there need for a new notation?
 
 \section{Motivation}
 
@@ -10,54 +10,58 @@ When I found myself in a team working on generalisation of deep learning models,
 % FIXME: Currently, the snippet defines logits and values, but does not use the former. Also fix in Ein.
 \begin{center}
 \begin{cminted}{python}
-att_1 = expand_dims(att_1, axis=-1)
-att_2 = expand_dims(att_2, axis=-1)
-att_g = expand_dims(att_g, axis=-1)
+u = expand_dims(u, axis=-1)
+v = expand_dims(v, axis=-1)
+g = expand_dims(g, axis=-1)
 logits = (
-    transpose(att_1, (0, 2, 1, 3)) +  # + [B, H, N, 1]
-    transpose(att_2, (0, 2, 3, 1)) +  # + [B, H, 1, N]
-    transpose(att_e, (0, 3, 1, 2)) +  # + [B, H, N, N]
-    expand_dims(att_g, axis=-1)       # + [B, H, 1, 1]
-)                                     # = [B, H, N, N]
+    transpose(u, (0, 2, 1, 3)) +  # + [B, H, N, 1]
+    transpose(v, (0, 2, 3, 1)) +  # + [B, H, 1, N]
+    transpose(e, (0, 3, 1, 2)) +  # + [B, H, N, N]
+    expand_dims(g, axis=-1)       # + [B, H, 1, 1]
+)                                 # = [B, H, N, N]
 \end{cminted}
 \end{center}
 Problems found in this snippet are not uncommon in the domain. The code was difficult to write and is not much easier to read, there are plenty of cryptic parameters that are \textit{probably correct}, and it was necessary to add comments. These issues can be attributed to a failure of the underlying paradigm -- the array programming model. \textcite{paszke2021getting} argue why the model might not be an apt abstraction for modern workflows. Though there are certainly benefits, such as the abundant parallelism present and usually good behaviour under automatic differentiation, there are also shortcomings. The notation is often too explicit while also being too unconstrained, leading to code unreadable by both humans and machines. 
 
-Matters get worse when one realises the deep learning ecosystem is extremely centralised -- nearly all research and a significant part of engineering takes place in Python in a select few libraries. Examples include PyTorch, TensorFlow, JAX, and they turn out to all derive from the aforementioned NumPy \cite{frostig2018compiling, paszke2019pytorch, abadi2016tensorflow}, which itself embraces the array programming model \cite{harris2020array}. 
+Worse yet, the deep learning ecosystem is extremely centralised -- most research and engineering takes place in Python in a select few libraries. Examples include PyTorch, TensorFlow, JAX, and they all turn out to derive from the aforementioned NumPy \cite{frostig2018compiling, paszke2019pytorch, abadi2016tensorflow}, which itself embraces the array programming model \cite{harris2020array}. 
 % This makes implementing high-performance compilers unexpectedly hard, leading to the introduction of different intermediate representations \cite{feng2023tensorir}, posing challenges in translation to their different paradigms. 
-The deep learning ecosystem is constantly evolving, with new operations and hardware targets constantly developed. This makes for a colossal engineering effort, slowing down development of new practical approaches.
+The deep learning ecosystem is constantly evolving, with new operations and hardware targets constantly developed. This makes for an immense engineering effort, slowing down development of new practical approaches.
 
 \section{Prior art}
 
-Typical examples of languages used for numeric programming include C/C++, FORTRAN, and Julia. 
-They tend to have influences from APL (in their design \cite{bernecky1991fortran} or packages \cite{eigenweb}), but are primarily imperative languages -- which do grant a higher degree of control at the expense of more complex compilers. 
+Typical examples of languages used for numeric programming include C/C++ and FORTRAN. 
+They tend to have influences from APL (in their design \cite{bernecky1991fortran} or packages \cite{eigenweb}), but are primarily imperative languages -- which grant a higher degree of control at the expense of more complex compilers. 
 % The situation is similar when programming hardware accelerators such as GPUs with the C family languages. 
-These languages are seldom applied in domains like deep learning directly, and rather they are called from Python via its foreign function interface. 
+Such languages are seldom applied directly in domains like deep learning by practitioners (unless necessary), and rather they are called from Python via its foreign function interface. 
 % One usually only resorts to them when the existing libraries fail.
 % C/C++ are exceptions to the rule, due to their interoperability with Python and impact on GPGPU programming -- hence much of the numerical heavy-lifting is done with them. 
 
-Issues of the array programming model have not gone unnoticed in the Python community. Many of the problems revolve around higher-dimensional arrays, which have become commonplace in the domain. And similar to Iverson's approach, mathematical notation was sought after as a inspiration for an alternative -- in this case it was \textit{Einstein summation}. Initially limited approaches in Python -- such as \textit{Tensor Comprehensions} \cite{vasilache2018tensor} and \texttt{einops} \cite{rogozhnikov2021einops} -- can be seen as the emergence of \textbf{pointful array programming}, as introduced by \textcite{paszke2021getting}. 
+Issues of the array programming model have not gone unnoticed in the Python community. Similar to Iverson's approach, mathematical notation was sought after as an inspiration for an alternative -- in this case this inspiration was \textit{Einstein summation}. Initially limited approaches in Python -- such as \textit{Tensor Comprehensions} \cite{vasilache2018tensor} and \texttt{einops} \cite{rogozhnikov2021einops} -- can be seen as the emergence of \textbf{pointful array programming}, as described by \textcite{paszke2021getting} in the Dex language. 
 % This paradigm -- best exemplified by the Dex language \cite{paszke2021getting} -- aims to fix many problems of the established model, taking centre stage in this project. 
 
 \section{Aims}
 
-The main aim of the project is to design and implement a domain-specific language, hereafter called \textbf{Ein}, that pragmatically addresses problems of established Python array libraries through pointful array programming. This means:
+The main aim of the project is to design and implement a domain-specific language, hereafter called \textbf{Ein}, which pragmatically addresses problems of established Python array libraries by incorporating pointful array programming. This means:
 \begin{itemize}
     \item Ein needs to show improvement of notation on a selection of problems. It should be general enough to avoid awkward code switching and build on a formal foundation. There is a tool for every problem, and we should improve on the array programming model where it falls short. 
     \item Since Python is such an important aspect of array programming in practice, Ein needs to be easily integrated with it. 
-    % Attention should be paid to practicality and flexibility.
-    \item Due to the existing engineering effort to produce efficient array code targeting various hardware, the Ein should capitalise on this.
-    % in established projects to achieve this universality.
+    \item Ein should capitalise on existing engineering efforts, which already produces efficient array code targeting a variety of hardware.
 \end{itemize}
 I thus chose to embed Ein in Python, and execute it by calling NumPy routines.
-% in a fashion that is easy to generalise to similar targets. 
 
-\paragraph{Foreshadowing} The motivating example translates to the following code in Ein:
+\vspace*{\fill}
+\begin{tcolorbox}[colback=blue!5!white,colframe=blue!75!black]
+\paragraph{Foreshadowing} The motivating example translates to the following code using Ein:
+
 \begin{center}
+\vspace{1em}
 \begin{cminted}{python}
 logits = array(
     lambda b, h, u, v: s[b, u, h] + t[b, v, h] + e[b, u, v, h] + g[b, h]
 )
 \end{cminted}
 \end{center}
+
 The code became much closer to an index-oriented mathematical notation. It executes just as fast as the original by calling the same routines as the original, while being much more readable.
+\end{tcolorbox}
+\vspace*{\fill}

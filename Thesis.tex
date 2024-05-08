@@ -12,8 +12,14 @@
 \usepackage{stmaryrd}
 
 \usepackage{makecell}
+\usepackage{tcolorbox}
+\usepackage{xcolor}
+
+\usepackage{footnote}
+\makesavenoteenv{tabular}
 
 \usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows, quotes}
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
 
@@ -130,20 +136,24 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \title{Embedding Pointful Array Programming in~Python}
-% \subtitle{\textit{Escaping the Pointless}}
+\subtitle{Points for Free}
 \author{Jakub Bachurski}
 
 \begin{document}
 
 %TC:ignore
 \frontmatter
+\renewcommand*{\thefootnote}{\fnsymbol{footnote}}
   \include{Sources/Title}
   \include{Sources/Declaration}
   \include{Sources/Proforma}
 
-  \tableofcontents
+  {\hypersetup{hidelinks}
+  \tableofcontents}
  
 \mainmatter
+\setcounter{footnote}{0}
+\renewcommand*{\thefootnote}{\arabic{footnote}}
 
 %TC:endignore
   \include{Sources/1-Introduction}
@@ -170,6 +180,7 @@
 
   \addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
   \appendix 
+  \include{Sources/Appendices}
   \include{Sources/Proposal}
 
   % \printindex

@@ -1,7 +1,7 @@
 \chapter{Evaluation}
 
 Following the project proposal, evaluation focused on \textbf{expressiveness}, \textbf{correctness} and \textbf{performance}.
-As part of expressiveness, I consider Ein's usability as an alternative to NumPy, but also its computational limitations. For the latter criteria, I rely on diverse test and benchmark suites.
+As part of expressiveness, I consider Ein's usability as an alternative to NumPy, but also its computational limitations. For correctness and performance I rely on diverse test and benchmark suites.
 
 \section{Expressiveness}
 
@@ -16,7 +16,7 @@ I argue that Ein is a superior alternative to NumPy-like array frameworks in a v
 Ein's design takes advantage of the pointful style and higher-order combinators. 
 It introduces language features unseen in the array programming model.
 On the other hand, NumPy is occasionally more concise and is much more mature as software, but often leads to bad code for complex operations.
-To illustrate the key points, we follow a few case studies and discuss the differences between Ein and NumPy implementations.
+To illustrate the key points, we follow a few case studies and discuss the differences between Ein and NumPy.
 
 \subsubsection{Logits in a Graph Attention Network}
 
@@ -47,7 +47,7 @@ It is worth remarking that the Ein code compiles into NumPy calls which are just
 \begin{description}
     \item[Shape manipulation] The array programming model revolves around manipulating array shapes to `align' them for subsequent whole-array operations. This does not generalise well to \textbf{many-dimensional data} -- the code becomes polluted with these manipulations (and \textit{axis indexing}), and hence syntax becomes unhelpful in determining the actual semantics. In contrast, Ein code relies on index-oriented descriptions. Extending the implementation with another dimension is just adding another index -- rather than modifying fragile arguments to NumPy routines. Additionally, index names serve to hint at the meaning of dimensions -- like variable names hint at data they store.
     % this is reminiscent of manipulating a program in a de Bruijin index representation, which is not convenient for a human.  
-    \item[Batching] The Ein code is different from what was foreshadowed in the Introduction. We separated out \textcolor{blue}{\texttt{batch\_logits}}, which does most of the work, but disregarding the \textit{batch axis} (named \texttt{b}). A batch axis is a pervasive code structuring technique in NumPy code, which allows mapping an operation over many inputs (in our NumPy code comments denote it \texttt{B}). It is assumed that it will be carried through in broadcasting. In Ein, we explicitly map elements across each index \texttt{b}. This is clearer in intent and avoids arbitrary code conventions.
+    \item[Batching] The Ein code is different from what was foreshadowed in the Introduction. We separated out \textcolor{blue}{\texttt{batch\_logits}}, which does most of the work, but disregarding the \textit{batch axis} (named \texttt{b}). A batch axis is a pervasive code structuring technique in NumPy code, which allows mapping an operation over many inputs (here, comments denote it \texttt{B}). It is assumed that it will be carried through in broadcasting. In Ein, we explicitly map elements across each index \texttt{b}. This is clearer in intent and avoids arbitrary code conventions.
 \end{description}
 
 \subsubsection{Min-plus matrix multiplication}
@@ -139,7 +139,7 @@ def pairwiseL1(A: Vec[Vec[Float]]):
 \end{minipage}
 \end{center}
 \begin{description}
-    \item[Separation of concerns] The Ein implementation separates the computation of $L_1$ distances into the function \textcolor{blue}{\texttt{L1}} -- this is difficult to replicate in NumPy. By forcing reasoning on whole arrays, the array programming model actively discourages encapsulation. For example, say we want to generalise the code to different distances. A higher-order NumPy \textcolor{blue}{\texttt{pairwiseL1}} parameterised by the distance function would necessitate a certain contract (like a batch axis). In contrast, Ein's \textcolor{blue}{\texttt{pairwiseL1}} could be rewritten to take any distance function \texttt{dist} of the same signature as \textcolor{blue}{\texttt{L1}}:
+    \item[Separation of concerns] The Ein implementation separates the computation of $L_1$ distances into the function \textcolor{blue}{\texttt{L1}} -- this is difficult to replicate in NumPy. By forcing reasoning on whole arrays, the array programming model actively discourages encapsulation. For example, say we want to generalise the code to different distances. A higher-order NumPy \textcolor{blue}{\texttt{pairwiseL1}} parameterised by the distance function would necessitate a certain contract (like a batch axis). In contrast, Ein's \textcolor{blue}{\texttt{pairwiseL1}} could be rewritten to take any distance function \texttt{dist} with \textcolor{blue}{\texttt{L1}}'s signature:
     \begin{center}
     \begin{cminted}{python}
 def pairwiseL1(A: Vec[Vec[Float]], dist: (Vec[Float], Vec[Float]) -> Float):
@@ -147,7 +147,7 @@ def pairwiseL1(A: Vec[Vec[Float]], dist: (Vec[Float], Vec[Float]) -> Float):
     \end{cminted}
     \end{center}
     Ein's user-defined types also lead to rich abstractions. For instance, it is possible to nearly replicate the automatic differentiation transformation of \textcite{shaikhha2019efficient} by implementing an appropriate dual number type. We benchmark the use of abstractions in the `Semirings' case (Section \ref{benchmarks}).
-    \item[Type signatures] NumPy's support for useful type annotations is poor. Type checking with standard tools like \texttt{mypy} is even more problematic, and only partially solved by bespoke extensions \cite{liu2020type}. In contrast, Ein's type system is simple, behaves well under composition, and can be checked by \texttt{mypy}. For example, \texttt{mypy} infers the return type of \textcolor{blue}{\texttt{pairwiseL1}} -- \texttt{Vec[Vec[Float]]}. 
+    \item[Type signatures] NumPy's support for useful type annotations is poor. Type checking with standard tools like \texttt{mypy} is even more problematic, and only partially solved by bespoke extensions. In contrast, Ein's type system is simple, behaves well under composition, and can be checked by \texttt{mypy}. For example, \texttt{mypy} infers the return type of \textcolor{blue}{\texttt{pairwiseL1}} -- \texttt{Vec[Vec[Float]]}. 
 \end{description}
 
 \subsection{Computation in Phi}
@@ -160,13 +160,13 @@ Phi is not Turing-complete -- all programs terminate.
 A lower bound on its expressive power is given by primitive recursive functions. 
 Indeed, $\mathrm{fold}$ directly corresponds to primitive recursion $\rho$. 
 Nevertheless, we argue Turing-complete computations are seldom necessary in array programming -- for instance, no native NumPy routines involve unbounded search. 
-Since Ein is an embedded DSL, we can rely on the generality of its host language, Python -- as is standard practice. 
+Since Ein is an embedded DSL, we can rely on the generality of its host language, Python. 
 
 \paragraph{Lack of in-place updates} A major limitation of Phi is the lack of support for in-place updates (e.g. as in \mintinline{c}{a[5] = 42}). 
-Since Ein is purely functional, we cannot simply rely on side effects to handle updates.
+Since Ein is purely functional, we cannot rely on side effects to handle updates.
 To this end, Futhark uses a uniqueness type system, while Dex makes use of an effect system \cite{henriksen2017futhark, paszke2021getting}. 
 
-It is worth noting in-place updates can be (unsafely) replicated through the use of extrinsics as follows: 
+It is worth noting in-place updates can be (unsafely) replicated through the use of extrinsics: 
 \begin{center}    
 \begin{cminted}{python}
 def update(vec: Vec[Scalar], p: Scalar, x: Scalar) -> Vec[Scalar]:
@@ -178,7 +178,7 @@ def update(vec: Vec[Scalar], p: Scalar, x: Scalar) -> Vec[Scalar]:
 Here, \texttt{update} mutates its \texttt{vec} argument, returning \mintinline{python}{array(lambda i: where(i != p, vec[i], x))}. Careless use leads to unexpected behaviour, but the approach exemplifies how extrinsics can be used to extend Ein.
 
 
-\paragraph{Parallelism} Ein offers only limited support for common computational patterns. Though associative reductions were implemented as an extension, there are many other examples of useful parallel programming patterns. These are best exemplified by Futhark's array combinators -- particularly scan, histograms (\textit{scatter} in GPGPU programming), and filtering. Only some can be efficiently interpreted by calling out to NumPy routines, pointing to possible extensions to its interface.
+\paragraph{Parallelism} Ein offers only limited support for common computational patterns. Though associative reductions were implemented as an extension, there are many other parallel programming patterns. These are best exemplified by Futhark's array combinators -- particularly scan, histograms (\textit{scatter} in GPGPU programming), and filtering. Only some can be efficiently interpreted by calling out to NumPy routines, pointing to possible extensions to its interface.
 
 \section{Correctness}
 
@@ -198,38 +198,37 @@ I distinguish three kinds of such tests:
 Correct outputs are generated with Python reference code.
 To obtain baseline outputs for Phi programs constructed by Ein I use the na\"ive Phi interpreter.
 This allows diagnosis whether the problem is with the compiler to Yarr or the source Phi.
-Outputs are treated as correct even when equality is approximate (with defaults of \texttt{numpy.testing.assert\_allclose}), as many tests use floating point arithmetic. 
-Specifics of floating point semantics are often disregarded in domains like machine learning due to the limitations they cause in optimisations -- for instance, floating point addition is not associative \cite{alawi2004every}.
+Outputs are treated as correct even when equality is approximate (by \texttt{numpy.testing.assert\_allclose}), as many tests use floating point arithmetic. 
+Specifics of floating point are often disregarded in domains like machine learning due to the limitations they cause in optimisations -- famously, floating point addition is not associative \cite{alawi2004every}.
 
-Most tests are parameterised by execution backend (through \texttt{pytest.mark.parametrise}) and run on random inputs. Since control flow in Phi is limited, random data is essentially sufficient to capture whether compiled programs behave correctly. 
+Most tests are parameterised by execution backend (through \texttt{pytest.mark.parametrise}) and run on random inputs. Since control flow in Phi is limited, random data is sufficient to capture whether compiled programs behave correctly. 
 
-The entire test suite passes successfully. The test line coverage across the implementation was measured to be \textbf{92\%}. Most of the untested code is in error paths, which were tested less often. Tests instead focus on ensuring that correct Ein/Phi programs behave correctly.
+The entire test suite passes successfully. The test line coverage across the implementation was measured to be \textbf{92\%}. Most of the untested code is in error paths, as tests focus on ensuring that correct Ein/Phi programs behave properly.
 Checking that bad programs fail gracefully would mostly serve to test user experience, which was not part of the success criteria.
 
 \subsection{Defensive programming}
 
-To improve the capability of tests to pick up bad behaviour in internal parts of the implementation, a form of \textit{defensive programming} was applied throughout project code.
-This was only a general practice of ensuring expected compiler invariants are met through Python \mintinline{python}{assert} statements. Failing an assertion generally indicates an internal compiler error and hence a bug. 
+To improve the capability of tests to pick up bad behaviour in internal parts of the implementation, a form of \textit{defensive programming} was applied throughout.
+This was a general practice of ensuring expected compiler invariants are met through Python \mintinline{python}{assert} statements. Failing an assertion generally indicates an internal compiler error and hence a bug. 
 
 \needspace{2em}
 We consider a few examples of this defensive approach: \begin{itemize}
     \item Types in the array-of-structs to struct-of-arrays program transformation are mapped in a consistent way ($\phisoa{\phivectype{(\phipairtype{\tau_1}{\tau_2}})} = \phipairtype{\phivectype{\tau_1}}{\phivectype{\tau_2}}$). We assert this mapping is upheld for each subexpression.
     \item Outlining asserts the original program $p$ and $\mathrm{inline}(\mathrm{outline}(p))$ are equal. Therefore, we ensure let-bindings inserted preserve program semantics.
-    \item We check that all Phi and Yarr terms constructed within the compiler are well-typed.
+    \item We check that all Phi and Yarr terms constructed are well-typed.
 \end{itemize}
 % By testing invariants through program assertions and including feature-specific tests, a diverse component testing suite is formed. 
 
 \section{Performance}
-
-Ein's code-generation phase results in a Yarr program, which is by default interpreted by calling respective NumPy routines. 
-Hence, our choice of compilation target (and runtime) is unique in the regard it is rather high-level.
-The `machine instructions' are NumPy routines, and hence the we are limited by its performance. 
-We rely on the established approach of comparing compiler-generated programs to baselines.
-\subsection{Benchmarks}
-
 \label{benchmarks}
 
-We form a varied suite of baseline Python programs using NumPy (\textit{NumPy programs} for short). 
+Ein's code-generation phase results in a Yarr program, which is by default interpreted by calling respective NumPy routines. 
+Hence, our choice of compilation target (and runtime) is unusual in that it is rather high-level.
+`Machine instructions' are NumPy routines, and hence we are limited by NumPy's performance. 
+We thus rely on the established approach of comparing compiler-generated programs against baselines.
+% \subsection{Benchmarks}
+
+We form a varied suite of baseline Python programs using NumPy. 
 We then compare the baseline performance against equivalent Ein code.
 The choice of our benchmark baselines is inherently subjective -- for any Ein-generated program using NumPy, there is a just-as-fast program using NumPy directly.
 For a fair comparison, I aimed for \textit{idiomatic} NumPy code (e.g. freely allocating temporary arrays instead of managing memory).
@@ -255,9 +254,9 @@ We consider Ein to be \textit{efficient} if at large problem sizes the running t
 
 \paragraph{Suite} Our benchmark suite (Table \ref{tab:benchmarks}) builds on the findings from Section \ref{suite-review}. 
 Most cases are sourced from Futhark benchmarks \cite{The_Futhark_Hackers_futhark-benchmarks} (as done by Dex) and open-source implementations of deep learning architectures.
-I hand-translated all of the cases from the source language (Futhark, or Python using PyTorch/JAX) into equivalent a pair of programs in Python using Ein or NumPy.
+I hand-translated all of the cases from the source language (Futhark, or Python using PyTorch/JAX) into an equivalent pair of Python programs using Ein or NumPy.
 
-A benchmark case worth special note is \textit{Semirings}, which was implemented from scratch. 
+A benchmark worth special note is \textit{Semirings}, which was implemented from scratch. 
 The NumPy baseline is a standard $\mathcal O(n^3)$ implementation of the Floyd-Warshall all-pairs shortest paths algorithm. 
 In Ein, I instead make rich use of arrays of user-defined dataclass types. 
 I follow the approach of \textcite{dolan2013fun} for solving a general family of problems via matrices over \textit{closed semirings}%
@@ -285,9 +284,9 @@ class SemiringMatrix:
     \label{fig:semirings}
 \end{figure}
 
-It is worth note that the other two cases used in the test suite -- NN and KMeans (from Rodinia) -- were excluded from the benchmark. A computationally efficient implementation of these relies on features unavailable in Ein (respectively in-place updates and histogram computations). They could be mimicked through extrinsics in practice, but their use would not constitute a useful benchmark.
+It is worth note that the other two cases used in the test suite -- NN and KMeans (from Rodinia) -- were excluded from the benchmark. A computationally efficient implementation of these relies on features unavailable in Ein (respectively in-place updates and histogram computations). They could be mimicked through extrinsics in practice, but this would not constitute an informative benchmark.
 
-\paragraph{Methodology} Benchmarks were conducted on an M1 Pro MacBook (14-inch, 2021). The versions used were CPython \texttt{3.11.6} and NumPy \texttt{1.26.4}. No further thread parallelism was used beyond what is used by default in NumPy (in linear algebra routines). Large problem sizes are used (about $1\,\mathrm{s}$ of execution time), taking the minimum time across at least 5 runs. Minimum time is used as each benchmark performs the same number of operations per run, so most overheads are caused by external factors. Ein's compilation time was not included in the measurement, but it is on the order of $2\,\mathrm{ms}$ and thus negligible.
+\paragraph{Methodology} Benchmarks were conducted on an M1 Pro MacBook (14-inch, 2021). The versions used were CPython \texttt{3.11.9} and NumPy \texttt{1.26.4}. No thread parallelism was used beyond what is used by default in NumPy (in linear algebra routines). Large problem sizes were used (about $1\,\mathrm{s}$ runtime), taking the minimum time across at least 5 runs. Confidence intervals are given by the geometric standard deviation taken across runtime ratios of independent runs of Ein and the baseline. The ratio of minimum runtimes is reported, as each benchmark performs a deterministic sequence of operations, so most overheads are caused by external factors. Compilation was not included in the measurement, but it is negligible ($\sim 2\,\mathrm{ms}$).
 
 \begin{figure}[b]
     \centering
@@ -316,14 +315,14 @@ It is worth note that the other two cases used in the test suite -- NN and KMean
             height=13em,
         ]
     
-        \addplot[draw=blue, fill=blue!30] coordinates {
-            (Attention, 0.68) 
-            (GAT, 0.75) 
-            (Semirings, 0.67)
-            (MRI-Q, 1.0) 
-            (Stencil, 1.5)
-            (Hotspot, 0.99)
-            (Pathfinder, 1.16)
+        \addplot[draw=blue, fill=blue!30, error bars/.cd, y dir=both, y explicit] coordinates {
+            (Attention, 0.54) += (0, 0.06) -= (0, 0.06)
+            (GAT, 0.73) += (0, 0.1) -= (0, 0.2)
+            (Semirings, 0.65) += (0, 0.04) -= (0, 0.04)
+            (MRI-Q, 1.0) += (0, 0.03) -= (0, 0.03)
+            (Stencil, 1.43) += (0, 0.08) -= (0, 0.06)
+            (Hotspot, 1.01) += (0, 0.03) -= (0, 0.03)
+            (Pathfinder, 1.07) += (0, 0.2) -= (0, 0.15)
         };
         \addlegendentry{Ein}
         \addlegendimage{baseline legend}
@@ -340,12 +339,12 @@ It is worth note that the other two cases used in the test suite -- NN and KMean
 
 
 \paragraph{Discussion} Benchmark results can be seen in Figure \ref{fig:benchmark-results}. 
-We reach our efficiency goal -- Ein is no more than 60\% slower than the baseline, and in some cases it is up to 40\% faster.
-Ein's is able to perform various optimisations -- eliminating allocations of temporary arrays is especially influential. 
-On the other hand, performance deficits are especially due to missing advanced indexing strategies -- particularly in Stencil.
+We reach the performance goal -- Ein is no more than 60\% slower than the baseline, and it can be up to 50\% faster.
+Ein's is able to perform various optimisations -- eliminating allocations of temporary arrays is particularly important. 
+On the other hand, performance deficits are especially due to missing advanced indexing strategies -- especially in Stencil.
 However, the baseline Stencil implementation is ridden with error-prone expressions. 
-It contains nearly a dozen complex indexing expressions like \mintinline{python}{A[1:-1, :-2, 1:-1]}, which in Ein end up translated to forms like \mintinline{python}{A[x, y - 1, z]}.
-Therefore we conclude Ein offers a good trade-off on code readability and performance.
+It contains nearly a dozen complex indexing expressions like \mintinline{python}{A[1:-1, :-2, 1:-1]}, which in Ein would translate to \mintinline{python}{A[x, y - 1, z]}.
+Therefore, we conclude Ein offers a good trade-off on code readability and performance.
 
 
 \section{Work completed}
