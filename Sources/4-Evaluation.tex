@@ -228,9 +228,8 @@ Hence, our choice of compilation target (and runtime) is unusual in that it is r
 We thus rely on the established approach of comparing compiler-generated programs against baselines.
 % \subsection{Benchmarks}
 
-We form a varied suite of baseline Python programs using NumPy. 
-We then compare the baseline performance against equivalent Ein code.
-The choice of our benchmark baselines is inherently subjective -- for any Ein-generated program using NumPy, there is a just-as-fast program using NumPy directly.
+I formed a suite of baseline Python programs using NumPy, and compared their performance against equivalent Ein code.
+The choice of these baselines is inherently subjective -- for any Ein-generated program using NumPy, there is a just-as-fast program using NumPy directly.
 For a fair comparison, I aimed for \textit{idiomatic} NumPy code (e.g. freely allocating temporary arrays instead of managing memory).
 We consider Ein to be \textit{efficient} if at large problem sizes the running time is within a small constant factor of the baseline. 
 
@@ -239,15 +238,15 @@ We consider Ein to be \textit{efficient} if at large problem sizes the running t
     \centering
     \begin{tabular}{c|c|l}
        \textbf{Benchmark} & \textbf{Source} & \textbf{Description} \\ \hline
-        Attention & Open-source & core part of Neural Attention \\
-        GAT & Open-source & inference in the Graph Attention Network architecture \\
+        Attention & \href{https://rockt.github.io/2018/04/30/einsum}{Open-source} & core part of Neural Attention \\
+        GAT & \href{https://github.com/google-deepmind/clrs/blob/8697f51663bd77548f4b3108816c84d163883361/clrs/_src/processors.py#L130}{Open-source} & inference in the Graph Attention Network architecture \\
         Semirings & Based on \textcite{dolan2013fun} & shortest paths via closure of a tropical semiring matrix \\
         MRI-Q & Parboil & basic linear reduction \\
         Stencil & Parboil & basic 3D stencil \\
         Hotspot & Rodinia & complex 2D stencil \\
         Pathfinder & Rodinia & 1D dynamic programming 
     \end{tabular}
-    \caption{Brief overview of each of the Ein benchmark cases. They are also included in the test suite as system tests.}
+    \caption{Brief overview of each of the Ein benchmark cases. They are also included in the test suite as system tests. Implementation code of GAT is given in Appendix \ref{example-benchmark} as an example.}
     \label{tab:benchmarks}
 \end{table}
 
@@ -333,7 +332,7 @@ It is worth note that the other two cases used in the test suite -- NN and KMean
         \end{axis}
     \end{tikzpicture}
 
-    \caption{Ratio of the running time of Ein-generated NumPy programs, and the baseline NumPy. \textit{Lower is better.}}
+    \caption{Ratio of the running time of Ein-generated NumPy programs, and the baseline NumPy. \textit{Lower is better.} Exapnded results for varying problem sizes are given in Appendix \ref{more-benchmark-results}.}
     \label{fig:benchmark-results}
 \end{figure}
 
@@ -352,7 +351,7 @@ Therefore, we conclude Ein offers a good trade-off on code readability and perfo
 
 We summarise the work completed basing on the success criteria from the proposal: \begin{description}
     \item[Designing a pointful array calculus] Phi was designed successfully, and ended up building on the $\tilde F$ language due to \textcite{shaikhha2019efficient}. This further includes various extensions with respect to the proposal: fully-fledged pair types, size assertions, folds, and associative reductions.
-    \item[Embedding an array language in Python] The implemented \texttt{ein} library successfully embeds a pointful array language -- Ein -- in Python. Ein's API builds up terms in the Phi calculus, after which it allows calling out to the compiler to evaluate the program with an execution backend. Key extensions on the proposed core interface are: size inference, general \texttt{fold} and \texttt{reduce} combinators, extrinsics, rich record types, and support for type annotations.
+    \item[Embedding an array language in Python] The \texttt{ein} library successfully embeds a pointful array language -- Ein -- in Python. Ein's API builds up terms in the Phi calculus, after which it allows evaluating the program with an execution backend. Key extensions are: size inference, general \texttt{fold} and \texttt{reduce} combinators, extrinsics, rich record types, and support for type annotations.
     \item[Efficient execution backend] We compile pointful array programs (in the Phi calculus) by generating point-free array code (Yarr calculus) using the foundation of the newly introduced Axials. Yarr programs are efficiently interpreted by calling NumPy routines. A key extension was the inclusion of a additional backends -- using PyTorch and JAX rather than NumPy -- allowing Ein to take advantage of hardware acceleration and automatic differentation.
 \end{description}
 Ein's compiler middle-end was also suitable for extensions: the array-of-structs to struct-of-arrays transformation and outlining (common subexpression elimination and loop-invariant code motion).

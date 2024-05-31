@@ -743,7 +743,7 @@ We now describe our scheme for compiling Phi into Yarr. It could be said it \tex
 
 We introduce a transformation $\mathcal A \denot{e}$ mapping Phi terms $e$ to an Axial of Yarr terms $E$:
 $$ \mathcal A \denot{e} = \langle \pi, E \rangle $$
-where $\pi$ is a permutation of the free indices $\iota(e) \subseteq \mathrm{Index}$ of $e$, called \textit{pi} (as in Axials). The encoding of $\mathcal A$ `flattens' the Axial \textit{values}, so $\mathrm{rank}(E) = |\pi| + \mathrm{rank}(e)$. Thanks to Axials forming an applicative, $\mathcal A \denot{e}$ can be composed from $\mathcal A$ for subterms of $e$. 
+where $\pi$ is a permutation of the free indices $\iota(e) \subseteq \mathrm{Index}$ of $e$, called \textit{axes} (as in Axials). The encoding of $\mathcal A$ `flattens' the Axial \textit{values}, so $\mathrm{rank}(E) = |\pi| + \mathrm{rank}(e)$. Thanks to Axials forming an applicative, $\mathcal A \denot{e}$ can be composed from $\mathcal A$ for subterms of $e$. 
 For a closed Phi program $p$, we expect that $P$ s.t. $\mathcal A \denot{p} = \phipair{[]}{P}$ is its Yarr equivalent. It remains to fill in the gap where there are free indices (i.e. $\pi = \left[ \pi^{(1)}, \dots, \pi^{(k)} \right]$ is non-empty). We require the following \textit{semantic equivalence} property for $\mathcal A \denot e = \phipair{\pi}{E}$:
 $$ \denot{\phivec{\pi^{(1)}}{\sizeat{\pi^{(1)}}}{\dots \phivec{\pi^{(k)}}{\sizeat{\pi^{(k)}}}{e}}} = \denot{E}$$
 where $\sizeat i$ (in general, a Phi term) is used to denote the size of the range of index $i$. For example, consider $p = \phivec{i}{2}{\phivec{j}{3}{i + j}}$, so that $\sizeat i = 2$ and $\sizeat j = 3$. Then the following satisfies the property at $e \mapsto i + j$:
@@ -898,7 +898,7 @@ Ein does have to make some assumptions about the provided function, forming the 
 
 The Ein repository was built from scratch, and no pre-existing code was used.
 It follows a usual Python project structure, with the root directory containing the \texttt{ein/} source directory, \texttt{tests/}, \texttt{tools/}, project configuration files (\texttt{pyproject.toml}, \texttt{.pre-commit-config.yaml}, etc.), and the Git configuration. 
-A high-level breakdown is given in Table \ref{tab:repository}. The repository totals 4815 lines of Python code in the implementation and 2256 in tests and tools (as counted by \texttt{cloc}, with the code formatted by \texttt{black}). I included an extensive \texttt{README.md}, which contains setup instructions and a brief documentation.
+A high-level breakdown is given in Table \ref{tab:repository}. The repository totals 4815 lines of Python code in the implementation and 2256 in tests and tools (as counted by \texttt{cloc}, with the code formatted by \texttt{black}). I included an extensive \texttt{README.md}, which contains setup instructions and a brief documentation. I also implemented debug tooling for pretty-printing the compiler IR and visualising term graphs (see Appendix \ref{compiler-outputs}).
 
 \begin{table}[h]
     \centering
